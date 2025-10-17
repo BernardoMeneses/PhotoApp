@@ -8,6 +8,8 @@ dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const database_1 = require("./config/database");
+const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+const yamljs_1 = __importDefault(require("yamljs"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 app.use((0, cors_1.default)());
@@ -17,6 +19,13 @@ app.get("/ping", (req, res) => {
 });
 app.use("/uploads", express_1.default.static("uploads"));
 app.use("/test", express_1.default.static(".", { index: "test-routes.html" }));
+try {
+    const spec = yamljs_1.default.load('./openapi.yaml');
+    app.use('/docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(spec));
+}
+catch (err) {
+    console.error("❌ Error setting up Swagger UI:", err);
+}
 try {
     const photosRouter = require("./modules/photos/photos.controller").default;
     const authRouter = require("./modules/auth/auth.controller").default;
@@ -29,14 +38,12 @@ try {
     app.use("/profile", profileRouter);
     app.use("/albums", albumsRouter);
     app.use("/categories", categoriesRouter);
-    console.log("✅ Routes loaded successfully");
 }
 catch (error) {
     console.error("❌ Error loading routes:", error);
 }
 app.listen(PORT, async () => {
-    console.log(`✅ Server running at http://localhost:${PORT}`);
-    console.log("🌍 GOOGLE_REDIRECT_URI:", process.env.GOOGLE_DRIVE_REDIRECT_URI);
+    console.log(`✅ Server running`);
     try {
         await (0, database_1.testConnection)();
     }

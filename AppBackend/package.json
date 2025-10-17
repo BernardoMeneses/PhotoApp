@@ -4,6 +4,8 @@
     "@supabase/supabase-js": "^2.57.4",
     "@types/pg": "^8.15.5",
     "axios": "^1.12.2",
+    "swagger-ui-express": "^4.6.3",
+    "yamljs": "^0.3.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",

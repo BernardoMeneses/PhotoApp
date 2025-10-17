@@ -71,7 +71,7 @@ router.get("/all", async (req, res) => {
         res.status(500).json({ error: "Failed to list photos" });
     }
 });
-router.delete("/:photoName", auth_middleware_1.authMiddleware, async (req, res) => {
+router.post("/delete/:photoName", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: "User not authenticated" });
@@ -90,7 +90,7 @@ router.delete("/:photoName", auth_middleware_1.authMiddleware, async (req, res) 
         res.status(500).json({ error: "Failed to delete photo" });
     }
 });
-router.delete("/by-url", auth_middleware_1.authMiddleware, async (req, res) => {
+router.post("/delete-by-url", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: "User not authenticated" });
@@ -216,7 +216,7 @@ router.get("/drive-status", auth_middleware_1.authMiddleware, async (req, res) =
         res.status(500).json({ error: "Failed to check Google Drive status" });
     }
 });
-router.delete("/disconnect-drive", auth_middleware_1.authMiddleware, async (req, res) => {
+router.post("/disconnect-drive", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user?.uid) {
             return res.status(401).json({ error: "User not authenticated" });

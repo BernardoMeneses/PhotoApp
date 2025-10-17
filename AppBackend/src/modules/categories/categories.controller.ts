@@ -126,7 +126,7 @@ router.put("/:id", authMiddleware, async (req: AuthenticatedRequest, res: Respon
 });
 
 // Delete category
-router.delete("/:id", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/:id/delete", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const categoryId = parseInt(req.params.id);
     if (isNaN(categoryId)) {

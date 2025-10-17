@@ -114,7 +114,7 @@ router.put("/:id", auth_middleware_1.authMiddleware, async (req, res) => {
         res.status(500).json({ error: error.message || "Failed to update category" });
     }
 });
-router.delete("/:id", auth_middleware_1.authMiddleware, async (req, res) => {
+router.post("/:id/delete", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         const categoryId = parseInt(req.params.id);
         if (isNaN(categoryId)) {

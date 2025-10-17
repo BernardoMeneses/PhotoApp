@@ -184,7 +184,7 @@ router.put("/:id", auth_middleware_1.authMiddleware, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-router.delete("/:id", auth_middleware_1.authMiddleware, async (req, res) => {
+router.post("/:id/delete", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user?.uid) {
             return res.status(401).json({ error: "User not authenticated" });
@@ -288,7 +288,7 @@ router.get("/:id/photos", auth_middleware_1.authMiddleware, async (req, res) => 
         res.status(500).json({ error: error.message });
     }
 });
-router.delete("/:id/photos/:photoName", auth_middleware_1.authMiddleware, async (req, res) => {
+router.post("/:id/photos/:photoName/remove", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user?.uid) {
             return res.status(401).json({ error: "User not authenticated" });

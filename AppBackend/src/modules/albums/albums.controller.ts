@@ -249,10 +249,10 @@ router.put("/:id", authMiddleware, async (req: AuthenticatedRequest, res: Respon
 });
 
 /**
- * DELETE /albums/:id - Deletar um álbum
+ * POST /albums/:id/delete - Deletar um álbum
  * Requer autenticação: Bearer token
  */
-router.delete("/:id", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/:id/delete", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });
@@ -381,8 +381,8 @@ router.get("/:id/photos", authMiddleware, async (req: AuthenticatedRequest, res:
   }
 });
 
-// DELETE /albums/:id/photos/:photoName - remover foto do álbum
-router.delete("/:id/photos/:photoName", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+// POST /albums/:id/photos/:photoName/remove - remover foto do álbum
+router.post("/:id/photos/:photoName/remove", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });

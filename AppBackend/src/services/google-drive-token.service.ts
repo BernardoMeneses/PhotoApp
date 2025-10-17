@@ -32,7 +32,6 @@ export class GoogleDriveTokenService {
 
     try {
       await pool.query(createTableQuery);
-      console.log('✅ Tabela google_drive_tokens criada/verificada');
     } catch (error: any) {
       console.error('❌ Erro ao criar tabela google_drive_tokens:', error.message);
       throw error;

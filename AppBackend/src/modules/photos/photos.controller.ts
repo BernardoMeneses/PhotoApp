@@ -90,7 +90,7 @@ router.get("/all", async (req: Request, res: Response) => {
 });
 
 // Deletar foto por nome (requer autenticação)
-router.delete("/:photoName", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/delete/:photoName", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "User not authenticated" });
@@ -111,7 +111,7 @@ router.delete("/:photoName", authMiddleware, async (req: AuthenticatedRequest, r
 });
 
 // Deletar foto por URL (requer autenticação)
-router.delete("/by-url", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/delete-by-url", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: "User not authenticated" });
@@ -267,7 +267,7 @@ router.get("/drive-status", authMiddleware, async (req: AuthenticatedRequest, re
 });
 
 // DELETE /photos/disconnect-drive - Desconectar Google Drive
-router.delete("/disconnect-drive", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.post("/disconnect-drive", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });

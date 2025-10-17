@@ -19,7 +19,6 @@ class GoogleDriveTokenService {
     `;
         try {
             await database_1.pool.query(createTableQuery);
-            console.log('✅ Tabela google_drive_tokens criada/verificada');
         }
         catch (error) {
             console.error('❌ Erro ao criar tabela google_drive_tokens:', error.message);
