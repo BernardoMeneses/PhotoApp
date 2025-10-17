@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Rotas - Backend</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .endpoint { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9; }
+        .method { display: inline-block; padding: 5px 10px; border-radius: 3px; color: white; font-weight: bold; margin-right: 10px; }
+        .get { background: #28a745; }
+        .post { background: #0174f8; }
+        .put { background: #ff9800; }
+        .delete { background: #dc3545; }
+        button { background: #007bff; color: white; padding: 8px 15px; border: none; border-radius: 3px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 3px; background: #e9ecef; min-height: 40px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Routes - Backend API</h1>
+        
+        <!-- Token Status -->
+        <div class="endpoint" style="background: #e3f2fd;">
+            <h3>🔐 Token Status</h3>
+            <div id="token-status">No token available</div>
+            <button onclick="showToken()" style="background: #6c757d;">Show Token</button>
+            <button onclick="clearToken()" style="background: #dc3545;">Clear Token</button>
+        </div>
+        
+        <!-- GET /ping -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/ping</strong> - Server Test
+            <br>
+            <button onclick="testPing()">Ping test</button>
+            <div id="ping-result" class="result"></div>
+        </div>
+        <!-- GET /photos -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/photos</strong> - My Photos List (requires login)
+            <br>
+            <button onclick="testPhotos()">Get My Photos</button>
+            <div id="photos-result" class="result"></div>
+        </div>
+
+        <!-- GET /photos/all -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/photos/all</strong> - All Photos List (public)
+            <br>
+            <button onclick="testAllPhotos()">Get All Photos</button>
+            <div id="all-photos-result" class="result"></div>
+        </div>
+
+        <!-- POST /photos/upload -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/photos/upload</strong> - Upload Photo (requires login)
+            <br>
+            <input type="file" id="photo-file" accept="image/*">
+            <input type="text" id="photo-title" placeholder="Photo Title" value="Test Photo">
+            <input type="text" id="photo-description" placeholder="Photo Description" value="A test photo upload">
+            <button onclick="testUploadPhoto()">Upload Photo</button>
+            <div id="upload-result" class="result"></div>
+        </div>
+
+        <!-- DELETE /photos/:photoName -->
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/photos/:photoName</strong> - Delete Photo by Name (requires login)
+            <br>
+            <input type="text" id="delete-photo-name" placeholder="Photo filename (e.g., uuid-photo.jpg)" value="">
+            <button onclick="testDeletePhoto()">Delete Photo</button>
+            <div id="delete-photo-result" class="result"></div>
+        </div>
+
+        <!-- DELETE /photos/by-url -->
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/photos/by-url</strong> - Delete Photo by URL (requires login)
+            <br>
+            <input type="url" id="delete-photo-url" placeholder="Full photo URL" value="" style="width: 400px;">
+            <button onclick="testDeletePhotoByUrl()">Delete Photo by URL</button>
+            <div id="delete-photo-url-result" class="result"></div>
+        </div>
+
+        <!-- POST /auth/signup -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/auth/signup</strong> - Register User
+            <br>
+            <input type="email" id="signup-email" placeholder="Email" value="test@example.com">
+            <input type="password" id="signup-password" placeholder="Password" value="123456">
+            <button onclick="testSignup()">Signup test</button>
+            <div id="signup-result" class="result"></div>
+        </div>
+
+        <!-- POST /auth/login -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/auth/login</strong> - Login User
+            <br>
+            <input type="email" id="login-email" placeholder="Email" value="test@example.com">
+            <input type="password" id="login-password" placeholder="Password" value="123456">
+            <button onclick="testLogin()">Login test</button>
+            <div id="login-result" class="result"></div>
+        </div>
+
+        <!-- POST /auth/google -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/auth/google</strong> - Login with Google
+            <br>
+            <input type="text" id="google-idtoken" placeholder="Google ID Token (from Google Sign-In)" value="" style="width: 80%;">
+            <button onclick="testGoogleLogin()">Login with Google</button>
+            <div id="google-login-result" class="result"></div>
+            <div style="margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 5px; font-size: 12px;">
+                <strong>ℹ️ Como obter o Google ID Token:</strong><br>
+                1. No frontend, use o Google Sign-In SDK<br>
+                2. Após o usuário fazer login com Google, você receberá um ID token<br>
+                3. Cole esse token aqui para testar o endpoint<br>
+                <em>Nota: Este é um token de autenticação, não uma senha!</em>
+            </div>
+        </div>
+
+        <!-- POST /auth/link-google -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/auth/link-google</strong> - Link Google Account (requires login)
+            <br>
+            <input type="text" id="link-google-idtoken" placeholder="Google ID Token" value="" style="width: 80%;">
+            <button onclick="testLinkGoogle()">Link Google Account</button>
+            <div id="link-google-result" class="result"></div>
+            <div style="margin-top: 10px; padding: 10px; background-color: #fff3cd; border-radius: 5px; font-size: 12px;">
+                <strong>⚠️ Aviso:</strong> Você precisa estar logado (ter um Firebase ID token válido) para vincular uma conta Google.<br>
+                Esta funcionalidade permite que um usuário com email/senha também possa fazer login com Google.
+            </div>
+        </div>
+
+        <!-- GET /profile -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/profile</strong> - Get Profile (requires login)
+            <br>
+            <button onclick="testGetProfile()">Get Profile</button>
+            <div id="get-profile-result" class="result"></div>
+        </div>
+
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/profile</strong> - Update Profile
+            <br>
+            <input type="text" id="profile-displayName" placeholder="Display Name" value="Test User">
+            <input type="email" id="profile-email" placeholder="Email" value="test@example.com">
+            <input type="password" id="profile-password" placeholder="Password" value="123456">
+            <button onclick="testProfileUpdate()">Update Profile</button>
+            <div id="profile-result" class="result"></div>
+        </div>
+
+        <!-- PUT /profile/email -->
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/profile/email</strong> - Update Email Only (requires login)
+            <br>
+            <input type="email" id="update-email" placeholder="New Email" value="newemail@example.com">
+            <button onclick="testUpdateEmail()">Update Email</button>
+            <div id="update-email-result" class="result"></div>
+        </div>
+
+        <!-- PUT /profile/password -->
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/profile/password</strong> - Update Password Only (requires login)
+            <br>
+            <input type="password" id="current-password" placeholder="Current Password" value="123456">
+            <input type="password" id="new-password" placeholder="New Password" value="newpassword123">
+            <button onclick="testUpdatePassword()">Update Password</button>
+            <div id="update-password-result" class="result"></div>
+        </div>
+
+        <!-- =========================== ALBUMS SECTION =========================== -->
+        <h2 style="margin-top: 40px; color: #007bff;">📁 Albums Management</h2>
+        
+        <!-- POST /albums - Create Album -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/albums</strong> - Create Album (requires login)
+            <br>
+            <input type="text" id="album-title" placeholder="Album Title" value="My Travel Photos">
+            <input type="text" id="album-hexcolor" placeholder="Hex Color" value="#3498db">
+            <input type="number" id="album-year" placeholder="Year" value="2024">
+            <input type="url" id="album-coverimage" placeholder="Cover Image URL (optional)" value="">
+            <select id="album-categoryid">
+                <option value="">No category (optional)</option>
+            </select>
+            <button onclick="loadCategoriesForAlbum()">🔄 Load Categories</button>
+            <button onclick="testCreateAlbum()">Create Album</button>
+            <div id="create-album-result" class="result"></div>
+        </div>
+
+        <!-- GET /albums - List Albums -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/albums</strong> - My Albums (requires login)
+            <br>
+            <button onclick="testGetAlbums()">Get My Albums</button>
+            <div id="get-albums-result" class="result"></div>
+        </div>
+
+        <!-- GET /albums/:id - Get Album -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/albums/:id</strong> - Get Specific Album (requires login)
+            <br>
+            <input type="number" id="get-album-id" placeholder="Album ID" value="1">
+            <button onclick="testGetAlbum()">Get Album</button>
+            <div id="get-album-result" class="result"></div>
+        </div>
+
+        <!-- PUT /albums/:id - Update Album -->
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/albums/:id</strong> - Update Album (requires login)
+            <br>
+            <input type="number" id="update-album-id" placeholder="Album ID" value="1">
+            <input type="text" id="update-album-title" placeholder="New Title" value="Updated Album">
+            <input type="text" id="update-album-hexcolor" placeholder="New Hex Color" value="#e74c3c">
+            <input type="number" id="update-album-year" placeholder="New Year" value="2025">
+            <input type="url" id="update-album-coverimage" placeholder="New Cover Image URL" value="">
+            <select id="update-album-categoryid">
+                <option value="">Remove category</option>
+            </select>
+            <button onclick="loadCategoriesForUpdate()">🔄 Load Categories</button>
+            <button onclick="testUpdateAlbum()">Update Album</button>
+            <div id="update-album-result" class="result"></div>
+        </div>
+
+        <!-- DELETE /albums/:id - Delete Album -->
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/albums/:id</strong> - Delete Album (requires login)
+            <br>
+            <input type="number" id="delete-album-id" placeholder="Album ID" value="1">
+            <button onclick="testDeleteAlbum()" style="background: #dc3545;">Delete Album</button>
+            <div id="delete-album-result" class="result"></div>
+        </div>
+
+        <!-- =========================== CATEGORIES SECTION =========================== -->
+        <h2 style="margin-top: 40px; color: #007bff;">🏷️ Categories Management</h2>
+        
+        <!-- POST /categories - Create Category -->
+        <div class="endpoint">
+            <span class="method post">POST</span>
+            <strong>/categories</strong> - Create Category (requires login)
+            <br>
+            <input type="text" id="category-name" placeholder="Category Name" value="Travel">
+            <input type="text" id="category-description" placeholder="Description (optional)" value="Travel photos collection">
+            <input type="text" id="category-color" placeholder="Color (optional)" value="#3498db">
+            <button onclick="testCreateCategory()">Create Category</button>
+            <div id="create-category-result" class="result"></div>
+        </div>
+
+        <!-- GET /categories - List Categories -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/categories</strong> - My Categories (requires login)
+            <br>
+            <button onclick="testGetCategories()">Get My Categories</button>
+            <div id="get-categories-result" class="result"></div>
+        </div>
+
+        <!-- GET /categories/:id - Get Category -->
+        <div class="endpoint">
+            <span class="method get">GET</span>
+            <strong>/categories/:id</strong> - Get Specific Category (requires login)
+            <br>
+            <input type="number" id="get-category-id" placeholder="Category ID" value="1">
+            <button onclick="testGetCategory()">Get Category</button>
+            <div id="get-category-result" class="result"></div>
+        </div>
+
+        <!-- PUT /categories/:id - Update Category -->
+        <div class="endpoint">
+            <span class="method put">PUT</span>
+            <strong>/categories/:id</strong> - Update Category (requires login)
+            <br>
+            <input type="number" id="update-category-id" placeholder="Category ID" value="1">
+            <input type="text" id="update-category-name" placeholder="New Name" value="Updated Category">
+            <input type="text" id="update-category-description" placeholder="New Description" value="Updated description">
+            <input type="text" id="update-category-color" placeholder="New Color" value="#e74c3c">
+            <button onclick="testUpdateCategory()">Update Category</button>
+            <div id="update-category-result" class="result"></div>
+        </div>
+
+        <!-- DELETE /categories/:id - Delete Category -->
+        <div class="endpoint">
+            <span class="method delete">DELETE</span>
+            <strong>/categories/:id</strong> - Delete Category (requires login)
+            <br>
+            <input type="number" id="delete-category-id" placeholder="Category ID" value="1">
+            <button onclick="testDeleteCategory()" style="background: #dc3545;">Delete Category</button>
+            <div id="delete-category-result" class="result"></div>
+        </div>
+
+        <!-- Teste de todas as rotas -->
+        <div style="text-align: center; margin-top: 30px;">
+            <button onclick="testAllRoutes()" style="background: #28a745; font-size: 16px; padding: 12px 25px;">
+                🚀 Test All Routes
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let authToken = localStorage.getItem('authToken') || null; // ✅ Recupera token do localStorage
+
+        // ✅ Atualizar status do token na interface
+        function updateTokenStatus() {
+            const statusElement = document.getElementById('token-status');
+            console.log('🔍 Updating token status. Current token:', authToken ? authToken.substring(0, 20) + '...' : 'null');
+            
+            if (authToken) {
+                statusElement.innerHTML = `<span style="color: green;">✅ Token disponível: ${authToken.substring(0, 20)}...</span>`;
+                statusElement.style.background = '#d4edda';
+                statusElement.style.padding = '10px';
+                statusElement.style.borderRadius = '5px';
+            } else {
+                statusElement.innerHTML = '<span style="color: red;">❌ Nenhum token disponível</span>';
+                statusElement.style.background = '#f8d7da';
+                statusElement.style.padding = '10px';
+                statusElement.style.borderRadius = '5px';
+            }
+        }
+
+        // ✅ Mostrar token completo
+        function showToken() {
+            if (authToken) {
+                alert(`Token completo:\n${authToken}`);
+            } else {
+                alert('Nenhum token disponível. Faça login primeiro.');
+            }
+        }
+
+        // ✅ Limpar token
+        function clearToken() {
+            authToken = null;
+            localStorage.removeItem('authToken');
+            updateTokenStatus();
+            alert('Token removido!');
+        }
+
+        // ✅ Inicializar status do token ao carregar a página
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔍 Page loaded. Initial token:', authToken ? authToken.substring(0, 20) + '...' : 'null');
+            updateTokenStatus();
+        });
+
+        // ✅ Também chama imediatamente caso o DOM já esteja carregado
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', updateTokenStatus);
+        } else {
+            updateTokenStatus();
+        }
+
+        async function makeRequest(method, endpoint, data = null, requiresAuth = false) {
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                // ✅ Adicionar token se for requisição autenticada
+                if (requiresAuth && authToken) {
+                    options.headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const result = await response.json();
+                
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    status: 'Error',
+                    data: { error: error.message }
+                };
+            }
+        }
+
+        // ✅ Função específica para upload de arquivos
+        async function makeFileRequest(method, endpoint, formData, requiresAuth = false) {
+            try {
+                const options = {
+                    method: method,
+                    // NÃO definir Content-Type para FormData - o browser define automaticamente
+                    headers: {}
+                };
+
+                // ✅ Adicionar token se for requisição autenticada
+                if (requiresAuth && authToken) {
+                    options.headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                // FormData já está preparado, não precisa de JSON.stringify
+                options.body = formData;
+
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                
+                let result;
+                try {
+                    result = await response.json();
+                } catch {
+                    result = { message: await response.text() };
+                }
+                
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    status: 'Error',
+                    data: { error: error.message }
+                };
+            }
+        }
+
+        function displayResult(elementId, result) {
+            const element = document.getElementById(elementId);
+            const status = result.success ? 'success' : 'error';
+            element.className = `result ${status}`;
+            element.innerHTML = `
+                <strong>Status:</strong> ${result.status}<br>
+                <strong>Response:</strong> <pre>${JSON.stringify(result.data, null, 2)}</pre>
+            `;
+        }
+
+        function displayAlbumsResult(elementId, result) {
+            const element = document.getElementById(elementId);
+            const status = result.success ? 'success' : 'error';
+            element.className = `result ${status}`;
+            
+            if (result.success && result.data && result.data.data && Array.isArray(result.data.data)) {
+                const albums = result.data.data;
+                let html = `<strong>Status:</strong> ${result.status}<br>`;
+                html += `<strong>Total Albums:</strong> ${albums.length}<br><br>`;
+                
+                albums.forEach((album, index) => {
+                    html += `<div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 5px;">`;
+                    html += `<strong>Album ${index + 1}:</strong><br>`;
+                    html += `<strong>ID:</strong> ${album.id}<br>`;
+                    html += `<strong>Title:</strong> ${album.title}<br>`;
+                    html += `<strong>Year:</strong> ${album.year}<br>`;
+                    html += `<strong>Color:</strong> <span style="background-color: ${album.hexcolor}; padding: 2px 8px; color: white; border-radius: 3px;">${album.hexcolor}</span><br>`;
+                    
+                    if (album.category) {
+                        html += `<strong>Category:</strong> <span style="background-color: ${album.category.color || '#666'}; padding: 2px 8px; color: white; border-radius: 3px; margin-left: 5px;">`;
+                        html += `${album.category.name}`;
+                        if (album.category.description) {
+                            html += ` - ${album.category.description}`;
+                        }
+                        html += `</span><br>`;
+                    } else {
+                        html += `<strong>Category:</strong> <span style="color: #999; font-style: italic;">No category assigned</span><br>`;
+                    }
+                    
+                    if (album.coverimage) {
+                        html += `<strong>Cover:</strong> <img src="${album.coverimage}" style="max-width: 100px; max-height: 100px; object-fit: cover; border-radius: 3px;"><br>`;
+                    }
+                    html += `<strong>Created:</strong> ${new Date(album.created_at).toLocaleDateString()}<br>`;
+                    html += `</div>`;
+                });
+                
+                element.innerHTML = html;
+            } else {
+                element.innerHTML = `
+                    <strong>Status:</strong> ${result.status}<br>
+                    <strong>Response:</strong> <pre>${JSON.stringify(result.data, null, 2)}</pre>
+                `;
+            }
+        }
+
+        async function testPing() {
+            const result = await makeRequest('GET', '/ping');
+            displayResult('ping-result', result);
+        }
+
+
+        async function testPhotos() {
+            if (!authToken) {
+                displayResult('photos-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to see your photos!' }
+                });
+                return;
+            }
+            
+            const result = await makeRequest('GET', '/photos', null, true); // ✅ requiresAuth = true
+            displayResult('photos-result', result);
+        }
+
+        async function testAllPhotos() {
+            const result = await makeRequest('GET', '/photos/all', null, false); // ✅ Público, sem auth
+            displayResult('all-photos-result', result);
+        }
+
+        async function testUploadPhoto() {
+            if (!authToken) {
+                displayResult('upload-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to upload photos!' }
+                });
+                return;
+            }
+
+            const fileInput = document.getElementById('photo-file');
+            const title = document.getElementById('photo-title').value;
+            const description = document.getElementById('photo-description').value;
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                displayResult('upload-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please select a photo file first!' }
+                });
+                return;
+            }
+
+            const file = fileInput.files[0];
+            
+            // Verificar se é uma imagem
+            if (!file.type.startsWith('image/')) {
+                displayResult('upload-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please select a valid image file!' }
+                });
+                return;
+            }
+
+            // Criar FormData para upload
+            const formData = new FormData();
+            formData.append('photo', file);
+            formData.append('title', title);
+            formData.append('description', description);
+
+            console.log('📁 Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
+
+            const result = await makeFileRequest('POST', '/photos/upload', formData, true); // ✅ requiresAuth = true
+            displayResult('upload-result', result);
+        }
+
+        async function testDeletePhoto() {
+            if (!authToken) {
+                displayResult('delete-photo-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to delete photos!' }
+                });
+                return;
+            }
+
+            const photoName = document.getElementById('delete-photo-name').value;
+            
+            if (!photoName) {
+                displayResult('delete-photo-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please enter the photo filename!' }
+                });
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete photo: ${photoName}?`)) {
+                return;
+            }
+
+            const result = await makeRequest('DELETE', `/photos/${photoName}`, null, true);
+            displayResult('delete-photo-result', result);
+        }
+
+        async function testDeletePhotoByUrl() {
+            if (!authToken) {
+                displayResult('delete-photo-url-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to delete photos!' }
+                });
+                return;
+            }
+
+            const photoUrl = document.getElementById('delete-photo-url').value;
+            
+            if (!photoUrl) {
+                displayResult('delete-photo-url-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please enter the photo URL!' }
+                });
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete this photo?`)) {
+                return;
+            }
+
+            const result = await makeRequest('DELETE', '/photos/by-url', { photoUrl }, true);
+            displayResult('delete-photo-url-result', result);
+        }
+
+        async function testSignup() {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const result = await makeRequest('POST', '/auth/signup', { email, password });
+            displayResult('signup-result', result);
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const result = await makeRequest('POST', '/auth/login', { email, password });
+            
+            console.log('🔍 Login result:', result);
+            console.log('🔍 Login result.data:', result.data);
+            
+            // ✅ Guardar token se login for bem-sucedido
+            if (result.success && result.data && result.data.idToken) {
+                authToken = result.data.idToken;
+                localStorage.setItem('authToken', authToken);
+                console.log('✅ idToken found and saved:', authToken.substring(0, 20) + '...');
+                updateTokenStatus();
+            } else {
+                console.log('❌ Login failed or no idToken in response');
+                console.log('Available fields:', result.data ? Object.keys(result.data) : 'No data');
+            }
+            
+            displayResult('login-result', result);
+        }
+
+        async function testGoogleLogin() {
+            const googleIdToken = document.getElementById('google-idtoken').value;
+            
+            if (!googleIdToken || googleIdToken.trim() === '') {
+                displayResult('google-login-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please provide a Google ID token!' }
+                });
+                return;
+            }
+
+            console.log('🔐 Attempting Google login...');
+            const result = await makeRequest('POST', '/auth/google', { idToken: googleIdToken });
+            
+            console.log('🔍 Google login result:', result);
+            
+            // Guardar token se login for bem-sucedido
+            if (result.success && result.data && result.data.idToken) {
+                authToken = result.data.idToken;
+                localStorage.setItem('authToken', authToken);
+                console.log('✅ Google idToken saved:', authToken.substring(0, 20) + '...');
+                updateTokenStatus();
+            } else {
+                console.log('❌ Google login failed or no idToken in response');
+            }
+            
+            displayResult('google-login-result', result);
+        }
+
+        async function testLinkGoogle() {
+            const googleIdToken = document.getElementById('link-google-idtoken').value;
+            
+            if (!authToken) {
+                displayResult('link-google-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first with email/password to link your Google account!' }
+                });
+                return;
+            }
+
+            if (!googleIdToken || googleIdToken.trim() === '') {
+                displayResult('link-google-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please provide a Google ID token!' }
+                });
+                return;
+            }
+
+            console.log('🔗 Linking Google account...');
+            const result = await makeRequest('POST', '/auth/link-google', { 
+                firebaseIdToken: authToken,
+                googleIdToken: googleIdToken 
+            });
+            
+            console.log('🔍 Link Google result:', result);
+            displayResult('link-google-result', result);
+        }
+
+        async function testProfileUpdate() {
+            if (!authToken) {
+                displayResult('profile-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to get a token!' }
+                });
+                return;
+            }
+
+            const displayName = document.getElementById('profile-displayName').value;
+            const email = document.getElementById('profile-email').value;
+            const password = document.getElementById('profile-password').value;
+            
+            // ✅ Usar PUT e enviar token
+            const result = await makeRequest('PUT', '/profile', { displayName, email, password }, true);
+            displayResult('profile-result', result);
+        }
+
+        async function testGetProfile() {
+            if (!authToken) {
+                displayResult('get-profile-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to get a token!' }
+                });
+                return;
+            }
+
+            // ✅ GET profile com token
+            const result = await makeRequest('GET', '/profile', null, true);
+            displayResult('get-profile-result', result);
+        }
+
+        async function testUpdateEmail() {
+            if (!authToken) {
+                displayResult('update-email-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to get a token!' }
+                });
+                return;
+            }
+
+            const email = document.getElementById('update-email').value;
+            const result = await makeRequest('PUT', '/profile/email', { email }, true);
+            displayResult('update-email-result', result);
+        }
+
+        async function testUpdatePassword() {
+            if (!authToken) {
+                displayResult('update-password-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to get a token!' }
+                });
+                return;
+            }
+
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            
+            if (!currentPassword || !newPassword) {
+                displayResult('update-password-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Both current and new passwords are required!' }
+                });
+                return;
+            }
+
+            const result = await makeRequest('PUT', '/profile/password', { 
+                currentPassword, 
+                newPassword 
+            }, true);
+            
+            // Se a password foi atualizada com sucesso, atualizar o token
+            if (result.success && result.data?.newToken) {
+                authToken = result.data.newToken;
+                localStorage.setItem('authToken', authToken);
+                updateTokenStatus();
+                console.log('🔄 Token updated after password change');
+            }
+            
+            displayResult('update-password-result', result);
+        }
+
+        // ============================= ALBUMS FUNCTIONS =============================
+        
+        async function testCreateAlbum() {
+            if (!authToken) {
+                displayResult('create-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to create albums!' }
+                });
+                return;
+            }
+
+            const title = document.getElementById('album-title').value;
+            const hexcolor = document.getElementById('album-hexcolor').value;
+            const year = document.getElementById('album-year').value;
+            const coverimage = document.getElementById('album-coverimage').value;
+            const categoryId = document.getElementById('album-categoryid').value;
+
+            if (!title || !hexcolor || !year) {
+                displayResult('create-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Title, hex color, and year are required!' }
+                });
+                return;
+            }
+
+            const albumData = {
+                title,
+                hexcolor,
+                year: parseInt(year),
+                ...(coverimage && { coverimage }),
+                ...(categoryId && { categoryId: parseInt(categoryId) })
+            };
+
+            const result = await makeRequest('POST', '/albums', albumData, true);
+            displayResult('create-album-result', result);
+        }
+
+        async function testGetAlbums() {
+            if (!authToken) {
+                displayResult('get-albums-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to view albums!' }
+                });
+                return;
+            }
+
+            const result = await makeRequest('GET', '/albums', null, true);
+            displayAlbumsResult('get-albums-result', result);
+        }
+
+        async function testGetAlbum() {
+            if (!authToken) {
+                displayResult('get-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to view album!' }
+                });
+                return;
+            }
+
+            const albumId = document.getElementById('get-album-id').value;
+            if (!albumId) {
+                displayResult('get-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Album ID is required!' }
+                });
+                return;
+            }
+
+            const result = await makeRequest('GET', `/albums/${albumId}`, null, true);
+            displayResult('get-album-result', result);
+        }
+
+        async function testUpdateAlbum() {
+            if (!authToken) {
+                displayResult('update-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to update albums!' }
+                });
+                return;
+            }
+
+            const albumId = document.getElementById('update-album-id').value;
+            const title = document.getElementById('update-album-title').value;
+            const hexcolor = document.getElementById('update-album-hexcolor').value;
+            const year = document.getElementById('update-album-year').value;
+            const coverimage = document.getElementById('update-album-coverimage').value;
+            const categoryId = document.getElementById('update-album-categoryid').value;
+
+            if (!albumId) {
+                displayResult('update-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Album ID is required!' }
+                });
+                return;
+            }
+
+            const updateData = {};
+            if (title) updateData.title = title;
+            if (hexcolor) updateData.hexcolor = hexcolor;
+            if (year) updateData.year = parseInt(year);
+            if (coverimage) updateData.coverimage = coverimage;
+            if (categoryId !== '') {
+                updateData.categoryId = categoryId ? parseInt(categoryId) : null;
+            }
+
+            const result = await makeRequest('PUT', `/albums/${albumId}`, updateData, true);
+            displayResult('update-album-result', result);
+        }
+
+        async function testDeleteAlbum() {
+            if (!authToken) {
+                displayResult('delete-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to delete albums!' }
+                });
+                return;
+            }
+
+            const albumId = document.getElementById('delete-album-id').value;
+            if (!albumId) {
+                displayResult('delete-album-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Album ID is required!' }
+                });
+                return;
+            }
+
+            if (!confirm('Are you sure you want to delete this album?')) {
+                return;
+            }
+
+            const result = await makeRequest('DELETE', `/albums/${albumId}`, null, true);
+            displayResult('delete-album-result', result);
+        }
+
+        // ============================= CATEGORY LOADING FUNCTIONS =============================
+        
+        async function loadCategoriesForAlbum() {
+            if (!authToken) {
+                alert('Please login first to load categories!');
+                return;
+            }
+
+            try {
+                const result = await makeRequest('GET', '/categories', null, true);
+                const select = document.getElementById('album-categoryid');
+                
+                // Clear existing options except the first one
+                select.innerHTML = '<option value="">No category (optional)</option>';
+                
+                if (result.success && result.data && result.data.data) {
+                    result.data.data.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = `${category.name}${category.description ? ' - ' + category.description : ''}`;
+                        if (category.color) {
+                            option.style.backgroundColor = category.color;
+                            option.style.color = 'white';
+                        }
+                        select.appendChild(option);
+                    });
+                    alert(`Loaded ${result.data.data.length} categories successfully!`);
+                } else {
+                    alert('No categories found. Create some categories first!');
+                }
+            } catch (error) {
+                alert('Error loading categories: ' + error.message);
+            }
+        }
+
+        async function loadCategoriesForUpdate() {
+            if (!authToken) {
+                alert('Please login first to load categories!');
+                return;
+            }
+
+            try {
+                const result = await makeRequest('GET', '/categories', null, true);
+                const select = document.getElementById('update-album-categoryid');
+                
+                // Clear existing options except the first one
+                select.innerHTML = '<option value="">Remove category</option>';
+                
+                if (result.success && result.data && result.data.data) {
+                    result.data.data.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = `${category.name}${category.description ? ' - ' + category.description : ''}`;
+                        if (category.color) {
+                            option.style.backgroundColor = category.color;
+                            option.style.color = 'white';
+                        }
+                        select.appendChild(option);
+                    });
+                    alert(`Loaded ${result.data.data.length} categories successfully!`);
+                } else {
+                    alert('No categories found. Create some categories first!');
+                }
+            } catch (error) {
+                alert('Error loading categories: ' + error.message);
+            }
+        }
+
+        // ============================= CATEGORIES FUNCTIONS =============================
+        
+        async function testCreateCategory() {
+            if (!authToken) {
+                displayResult('create-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to create categories!' }
+                });
+                return;
+            }
+
+            const name = document.getElementById('category-name').value;
+            const description = document.getElementById('category-description').value;
+            const color = document.getElementById('category-color').value;
+
+            if (!name) {
+                displayResult('create-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Category name is required!' }
+                });
+                return;
+            }
+
+            const categoryData = {
+                name,
+                ...(description && { description }),
+                ...(color && { color })
+            };
+
+            const result = await makeRequest('POST', '/categories', categoryData, true);
+            displayResult('create-category-result', result);
+        }
+
+        async function testGetCategories() {
+            if (!authToken) {
+                displayResult('get-categories-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to view categories!' }
+                });
+                return;
+            }
+
+            const result = await makeRequest('GET', '/categories', null, true);
+            displayResult('get-categories-result', result);
+        }
+
+        async function testGetCategory() {
+            if (!authToken) {
+                displayResult('get-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to view category!' }
+                });
+                return;
+            }
+
+            const categoryId = document.getElementById('get-category-id').value;
+            if (!categoryId) {
+                displayResult('get-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Category ID is required!' }
+                });
+                return;
+            }
+
+            const result = await makeRequest('GET', `/categories/${categoryId}`, null, true);
+            displayResult('get-category-result', result);
+        }
+
+        async function testUpdateCategory() {
+            if (!authToken) {
+                displayResult('update-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to update categories!' }
+                });
+                return;
+            }
+
+            const categoryId = document.getElementById('update-category-id').value;
+            const name = document.getElementById('update-category-name').value;
+            const description = document.getElementById('update-category-description').value;
+            const color = document.getElementById('update-category-color').value;
+
+            if (!categoryId) {
+                displayResult('update-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Category ID is required!' }
+                });
+                return;
+            }
+
+            const updateData = {};
+            if (name) updateData.name = name;
+            if (description) updateData.description = description;
+            if (color) updateData.color = color;
+
+            if (Object.keys(updateData).length === 0) {
+                displayResult('update-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'At least one field is required for update!' }
+                });
+                return;
+            }
+
+            const result = await makeRequest('PUT', `/categories/${categoryId}`, updateData, true);
+            displayResult('update-category-result', result);
+        }
+
+        async function testDeleteCategory() {
+            if (!authToken) {
+                displayResult('delete-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Please login first to delete categories!' }
+                });
+                return;
+            }
+
+            const categoryId = document.getElementById('delete-category-id').value;
+            if (!categoryId) {
+                displayResult('delete-category-result', {
+                    success: false,
+                    status: 'Error',
+                    data: { error: 'Category ID is required!' }
+                });
+                return;
+            }
+
+            if (!confirm('Are you sure you want to delete this category? This will remove it from all associated albums.')) {
+                return;
+            }
+
+            const result = await makeRequest('DELETE', `/categories/${categoryId}`, null, true);
+            displayResult('delete-category-result', result);
+        }
+
+        async function testAllRoutes() {
+            console.log('🧪 Testing all routes...');
+            
+            await testPing();
+            await new Promise(resolve => setTimeout(resolve, 500));
+               
+            await testPhotos();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            console.log('✅ Testing all routes completed!');
+        }
+    </script>
+</body>
+</html>
