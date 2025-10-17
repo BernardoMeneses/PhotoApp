@@ -125,6 +125,75 @@ paths:
       responses:
         '200':
           description: Link result
+  /auth/drive/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login unificado ao Google Drive (auth required)
+      description: Se não enviar código, retorna authUrl. Se enviar código, conecta automaticamente.
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: Código de autorização do Google (opcional)
+      responses:
+        '200':
+          description: URL de autenticação ou conexão bem-sucedida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  authUrl:
+                    type: string
+                    description: URL de autenticação (quando não há código)
+                  connected:
+                    type: boolean
+                    description: Status da conexão (quando há código)
+                  valid:
+                    type: boolean
+                    description: Se os tokens são válidos (quando há código)
+                  photosFound:
+                    type: integer
+                    description: Número de fotos encontradas (quando há código)
+                  step:
+                    type: string
+                    enum: [auth_url, completed]
+                  message:
+                    type: string
+                  connected:
+                    type: boolean
+  /auth/drive/status:
+    get:
+      tags:
+        - Authentication
+      summary: Check Google Drive connection status (auth required)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Google Drive connection status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                  valid:
+                    type: boolean
+                  photosCount:
+                    type: integer
+                    description: Number of photos found in Google Drive
+
   /photos/upload:
     post:
       tags:

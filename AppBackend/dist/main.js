@@ -10,6 +10,7 @@ const cors_1 = __importDefault(require("cors"));
 const database_1 = require("./config/database");
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const yamljs_1 = __importDefault(require("yamljs"));
+const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 app.use((0, cors_1.default)());
@@ -20,8 +21,11 @@ app.get("/ping", (req, res) => {
 app.use("/uploads", express_1.default.static("uploads"));
 app.use("/test", express_1.default.static(".", { index: "test-routes.html" }));
 try {
-    const spec = yamljs_1.default.load('./openapi.yaml');
-    app.use('/docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(spec));
+    const swaggerPath = path_1.default.resolve(process.cwd(), "openapi.yaml");
+    console.log("📘 Loading Swagger from:", swaggerPath);
+    const spec = yamljs_1.default.load(swaggerPath);
+    app.use("/docs", swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(spec));
+    console.log("✅ Swagger UI loaded at /docs");
 }
 catch (err) {
     console.error("❌ Error setting up Swagger UI:", err);
@@ -43,7 +47,7 @@ catch (error) {
     console.error("❌ Error loading routes:", error);
 }
 app.listen(PORT, async () => {
-    console.log(`✅ Server running`);
+    console.log(`✅ Server running on http://localhost:${PORT}/docs`);
     try {
         await (0, database_1.testConnection)();
     }

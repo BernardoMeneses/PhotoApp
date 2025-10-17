@@ -55,7 +55,7 @@ try {
 }
 
 app.listen(PORT, async () => {
-  console.log(`✅ Server running`);
+  console.log(`✅ Server running on http://localhost:${PORT}/docs`);
   
   // Testar conexão com a base de dados
   try {
