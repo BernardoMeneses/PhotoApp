@@ -12,6 +12,8 @@ RUN node --max-old-space-size=2048 node_modules/typescript/bin/tsc
 FROM node:20-alpine AS production
 WORKDIR /usr/src/app
 
+# ✅ Adicionar esta linha para garantir que o openapi.yaml é incluído no build
+COPY openapi.yaml ./openapi.yaml
 COPY package*.json ./
 RUN npm install --omit=dev
 

@@ -23,9 +23,9 @@ app.get("/ping", (req, res) => {
 app.use("/uploads", express.static("uploads"));
 app.use("/test", express.static(".", { index: "test-routes.html" }));
 
-// Swagger UI
+// Configurar Swagger UI
 try {
-  const swaggerPath = path.resolve(__dirname, "../openapi.yaml");
+  const swaggerPath = path.resolve(process.cwd(), "openapi.yaml");
   console.log("📘 Loading Swagger from:", swaggerPath);
 
   const spec = YAML.load(swaggerPath);
