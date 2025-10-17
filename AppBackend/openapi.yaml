@@ -126,6 +126,24 @@ paths:
         '200':
           description: Link result
   /auth/drive/login:
+    get:
+      tags:
+        - Authentication
+      summary: Obter URL de autenticação do Google Drive (público)
+      description: Retorna a URL para iniciar o processo de autenticação OAuth do Google Drive
+      responses:
+        '200':
+          description: URL de autenticação gerada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    description: URL para autenticação OAuth do Google Drive
+        '500':
+          description: Erro interno do servidor
     post:
       tags:
         - Authentication

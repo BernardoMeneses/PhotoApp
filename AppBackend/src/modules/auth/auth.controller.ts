@@ -135,12 +135,10 @@ router.post("/drive/login", authMiddleware, async (req: AuthenticatedRequest, re
 });
 
 // GET returns the auth URL so the mobile/web client can redirect the user
-router.get("/drive/login", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+router.get("/drive/login", async (req: Request, res: Response) => {
   try {
-    if (!req.user?.uid) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
-
+    console.log("📥 Gerando URL de autenticação do Google Drive...");
+    
     const authUrl = googleDriveService.getAuthUrl();
     return res.status(200).json({ url: authUrl });
   } catch (error: any) {
