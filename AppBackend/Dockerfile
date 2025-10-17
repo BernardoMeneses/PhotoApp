@@ -7,10 +7,9 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm install 
 
-# Copia o resto do código
-COPY . .
-
 # Compila o projeto TypeScript
+COPY . .
+RUN chmod +x node_modules/.bin/tsc
 RUN npx tsc
 
 # Etapa 2: imagem final (produção)
