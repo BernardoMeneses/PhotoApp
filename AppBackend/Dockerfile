@@ -14,6 +14,7 @@ WORKDIR /usr/src/app
 
 # ✅ Adicionar esta linha para garantir que o openapi.yaml é incluído no build
 COPY openapi.yaml ./openapi.yaml
+COPY .env ./.env
 COPY package*.json ./
 RUN npm install --omit=dev
 
