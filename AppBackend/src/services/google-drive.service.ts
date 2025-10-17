@@ -25,16 +25,14 @@ export class GoogleDriveService {
    * Gerar URL de autenticação do Google
    */
   getAuthUrl(): string {
-    const authUrl = this.oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: this.SCOPES,
-      prompt: 'consent',
-      redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI
-    });
-    
-    console.log('🔗 URL de autenticação gerada:', authUrl);
-    return authUrl;
-  }
+  const authUrl = this.oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: this.SCOPES,
+    prompt: 'consent',
+    redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // ✅ manter
+  });
+  return authUrl;
+}
 
   /**
    * Criar cliente do Google Drive com tokens do usuário
@@ -48,19 +46,12 @@ export class GoogleDriveService {
    * Trocar authorization code por access_token e refresh_token
    */
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
-    try {
-      const { tokens } = await this.oauth2Client.getToken({
-        code,
-        redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // 👈 reforça também aqui
-      });
-
-      console.log('🔑 Tokens obtidos do Google:', tokens);
-      return tokens;
-    } catch (error: any) {
-      console.error('❌ Erro ao trocar código por tokens:', error.message);
-      throw new Error('Failed to exchange code for tokens');
-    }
-  }
+  const { tokens } = await this.oauth2Client.getToken({
+    code,
+    redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // ✅ manter
+  });
+  return tokens;
+}
 
   /**
    * Encontrar ou criar pasta do app no Google Drive

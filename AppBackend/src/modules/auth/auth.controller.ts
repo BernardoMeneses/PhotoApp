@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { authMiddleware, AuthenticatedRequest } from "../../middleware/auth.middleware";
 import { googleDriveService } from "../../services/google-drive.service";
@@ -108,64 +108,45 @@ router.post("/link-google", async (req, res) => {
  * POST /auth/drive/login - Login completo ao Google Drive
  * Recebe o código de autorização e conecta automaticamente
  */
-router.post("/drive/login", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.post("/drive/login", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });
     }
 
     const { code } = req.body;
-    
-    // Se não tem código, gerar URL de autenticação
+
+    // Sem código → retorna URL de autenticação
     if (!code) {
       const authUrl = googleDriveService.getAuthUrl();
-      return res.status(200).json({
+      return res.status(200).json({ 
         message: "Google Drive authentication URL generated",
-        authUrl: authUrl,
-        step: "auth_url"
+        authUrl 
       });
     }
 
-    // Se tem código, processar login completo
-    console.log("🔐 Processing Google Drive login with code...");
+    // Com código → processa autenticação
+    console.log("🔗 Processing Google Drive authentication...");
     
-    // 1. Trocar código por tokens
     const tokens = await googleDriveService.exchangeCodeForTokens(code);
-    
-    // 2. Salvar tokens no banco de dados
     await GoogleDriveTokenService.saveTokens(req.user.uid, tokens);
-    
-    // 3. Validar tokens
-    const isValid = await googleDriveService.validateTokens(tokens);
-    
-    // 4. Listar fotos como teste de conexão
-    let photosCount = 0;
-    try {
-      const photos = await googleDriveService.listPhotos(tokens);
-      photosCount = photos.length;
-    } catch (photoError) {
-      console.warn("⚠️ Could not list photos after connection:", photoError);
-    }
-    
+
     console.log("✅ Google Drive connected successfully");
     
-    res.status(200).json({
-      message: "Google Drive connected and ready",
-      connected: true,
-      valid: isValid,
-      photosFound: photosCount,
-      step: "completed"
+    res.status(200).json({ 
+      message: "Google Drive connected successfully",
+      connected: true 
     });
   } catch (error: any) {
-    console.error("❌ Error in Google Drive login:", error.message);
-    res.status(500).json({ error: "Failed to connect Google Drive: " + error.message });
+    console.error("❌ Google Drive login error:", error.message);
+    res.status(500).json({ error: "Failed to authenticate with Google Drive" });
   }
 });
 
 /**
- * GET /auth/drive/status - Verificar status da conexão com Google Drive
+ * GET /auth/drive/status - Verificar estado da conexão Google Drive
  */
-router.get("/drive/status", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.get("/drive/status", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });
@@ -173,50 +154,59 @@ router.get("/drive/status", authMiddleware, async (req: AuthenticatedRequest, re
 
     const hasTokens = await GoogleDriveTokenService.hasTokens(req.user.uid);
     
-    if (hasTokens) {
-      const tokens = await GoogleDriveTokenService.loadTokens(req.user.uid);
-      const isValid = tokens ? await googleDriveService.validateTokens(tokens) : false;
-      
-      // Se conectado, também contar fotos
-      let photosCount = 0;
-      if (isValid && tokens) {
-        try {
-          const photos = await googleDriveService.listPhotos(tokens);
-          photosCount = photos.length;
-        } catch (error) {
-          console.warn("⚠️ Could not count photos:", error);
-        }
-      }
-      
-      res.status(200).json({
-        connected: true,
-        valid: isValid,
-        photosCount: photosCount
-      });
-    } else {
-      res.status(200).json({
-        connected: false,
-        valid: false,
-        photosCount: 0
+    if (!hasTokens) {
+      return res.status(200).json({ 
+        connected: false, 
+        valid: false 
       });
     }
+
+    const tokens = await GoogleDriveTokenService.loadTokens(req.user.uid);
+    const isValid = tokens ? await googleDriveService.validateTokens(tokens) : false;
+    
+    res.status(200).json({ 
+      connected: true, 
+      valid: isValid 
+    });
   } catch (error: any) {
     console.error("❌ Error checking Google Drive status:", error.message);
     res.status(500).json({ error: "Failed to check Google Drive status" });
   }
 });
+/**
+ * GET /auth/drive/callback - Callback da autenticação Google OAuth
+ * Este endpoint é chamado diretamente pelo Google após o consentimento
+ */
+router.get("/drive/callback", async (req, res) => {
+  try {
+    const code = req.query.code as string;
+
+    if (!code) {
+      return res.status(400).send("Missing authorization code");
+    }
+
+    console.log("📥 Código OAuth recebido:", code);
+
+    // Apenas redirecionar de volta ao frontend com o code na URL
+    // O Flutter pode extrair este code e chamar /auth/drive/login novamente com ele
+    const redirectUrl = `photoapp://drive-auth?code=${code}`;
+    res.redirect(redirectUrl);
+
+  } catch (error: any) {
+    console.error("❌ Erro no callback do Google Drive:", error.message);
+    res.status(500).send("Google Drive OAuth callback failed");
+  }
+});
 
 /**
  * POST /auth/drive/disconnect - Desconectar Google Drive
- * Remove tokens do banco de dados
  */
-router.post("/drive/disconnect", authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.post("/drive/disconnect", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });
     }
 
-    // Remover tokens do banco de dados
     await GoogleDriveTokenService.deleteTokens(req.user.uid);
     
     res.status(200).json({
