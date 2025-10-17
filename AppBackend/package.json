@@ -33,7 +33,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node dist/main.js",
-    "build": "tsc"
+    "build": "tsc && cp openapi.yaml dist/"
+
   },
   "keywords": [],
   "author": "",

@@ -6,6 +6,7 @@ import cors from "cors";
 import { testConnection } from "./config/database";
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yamljs';
+import path from "path";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,9 +25,12 @@ app.use("/test", express.static(".", { index: "test-routes.html" }));
 
 // Swagger UI
 try {
-  const spec = YAML.load('./openapi.yaml');
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec));
+  const swaggerPath = path.resolve(__dirname, "../openapi.yaml");
+  console.log("📘 Loading Swagger from:", swaggerPath);
 
+  const spec = YAML.load(swaggerPath);
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(spec));
+  console.log("✅ Swagger UI loaded at /docs");
 } catch (err) {
   console.error("❌ Error setting up Swagger UI:", err);
 }

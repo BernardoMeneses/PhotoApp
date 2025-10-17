@@ -4,8 +4,10 @@ info:
   version: 1.0.0
   description: OpenAPI specification for PhotoApp backend (auto-generated from controller files)
 servers:
-  - url: https://backend-api.photoapp.redadviser.com/
-  
+  - url: http://localhost:3000,
+    description: Local development server
+  - url: https://backend-api.photoapp.redadviser.com,
+    description: Production server
 tags:
   - name: System
     description: System endpoints (health check, static files)
