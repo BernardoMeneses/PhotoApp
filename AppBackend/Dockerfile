@@ -1,21 +1,23 @@
-# Usa uma imagem base Node.js
+# Usa uma imagem base leve e moderna do Node.js
 FROM node:20-alpine
 
-# Define diretório de trabalho
+# Define o diretório de trabalho
 WORKDIR /usr/src/app
 
-# Copia package.json e instala dependências
+# Copia apenas os ficheiros de dependências primeiro (para usar cache Docker)
 COPY package*.json ./
+
+# Instala dependências de produção e de build
 RUN npm install
 
 # Copia o resto do código
 COPY . .
 
-# Compila TypeScript
+# Compila o código TypeScript
 RUN npm run build
 
-# Expõe a porta (CapRover irá mapear automaticamente)
+# Expõe a porta (CapRover injeta automaticamente a variável PORT)
 EXPOSE 3000
 
-# Comando para arrancar a app
-CMD ["node", "dist/main.js"]
+# Comando de arranque da app
+CMD ["npm", "start"]
