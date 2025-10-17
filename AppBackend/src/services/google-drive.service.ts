@@ -126,10 +126,26 @@ export class GoogleDriveService {
         fields: 'id, name, webViewLink, webContentLink'
       });
 
-      console.log(`📤 Foto '${fileName}' uploaded para Google Drive:`, response.data.id);
+      const fileId = response.data.id!;
+
+      // Tornar o arquivo público para que a URL de thumbnail funcione
+      try {
+        await drive.permissions.create({
+          fileId: fileId,
+          requestBody: {
+            role: 'reader',
+            type: 'anyone'
+          }
+        });
+        console.log(`🔓 Arquivo ${fileName} tornado público`);
+      } catch (permError: any) {
+        console.warn(`⚠️ Não foi possível tornar o arquivo público: ${permError.message}`);
+      }
+
+      console.log(`📤 Foto '${fileName}' uploaded para Google Drive:`, fileId);
 
       return {
-        id: response.data.id!,
+        id: fileId,
         name: response.data.name!,
         webViewLink: response.data.webViewLink!,
         webContentLink: response.data.webContentLink!
@@ -167,16 +183,25 @@ export class GoogleDriveService {
 
       console.log(`📋 Encontradas ${response.data.files?.length || 0} fotos no Google Drive`);
 
-      return response.data.files?.map(file => ({
+      const files = response.data.files || [];
+      
+      // Garantir que todos os arquivos sejam públicos
+      for (const file of files) {
+        if (file.id) {
+          await this.ensureFileIsPublic(tokens, file.id);
+        }
+      }
+
+      return files.map(file => ({
         id: file.id!,
         name: file.name!,
-        // 👇 usa webContentLink (link de download direto)
-        webViewLink: file.webViewLink!,
+        // 👇 usa URL do Google User Content que funciona melhor para imagens públicas
+        webViewLink: `https://lh3.googleusercontent.com/d/${file.id}=w1000-h1000`,
         webContentLink: file.webContentLink
           ?? `https://drive.google.com/uc?id=${file.id}&export=download`,
         createdTime: file.createdTime!,
         size: file.size!
-      })) || [];
+      }));
 
     } catch (error: any) {
       console.error('❌ Erro ao listar fotos do Google Drive:', error.message);
@@ -234,6 +259,45 @@ export class GoogleDriveService {
     }
 
     return results;
+  }
+
+  /**
+   * Verificar e tornar arquivo público se necessário
+   */
+  async ensureFileIsPublic(tokens: GoogleTokens, fileId: string): Promise<boolean> {
+    const drive = this.createDriveClient(tokens);
+
+    try {
+      // Verificar se já é público
+      const permissions = await drive.permissions.list({
+        fileId: fileId,
+        fields: 'permissions(id,type,role)'
+      });
+
+      const isPublic = permissions.data.permissions?.some(
+        perm => perm.type === 'anyone' && perm.role === 'reader'
+      );
+
+      if (isPublic) {
+        console.log(`✅ Arquivo ${fileId} já é público`);
+        return true;
+      }
+
+      // Tornar público
+      await drive.permissions.create({
+        fileId: fileId,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone'
+        }
+      });
+
+      console.log(`🔓 Arquivo ${fileId} tornado público`);
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Erro ao tornar arquivo público ${fileId}:`, error.message);
+      return false;
+    }
   }
 
   /**

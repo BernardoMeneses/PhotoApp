@@ -41,7 +41,9 @@ export class PhotosService {
         uploadedPhotos.push({
           id: driveFile.id,
           name: fileName,
-          url: `https://drive.google.com/uc?id=${driveFile.id}&export=download`,
+          url: `https://lh3.googleusercontent.com/d/${driveFile.id}=w1000-h1000`,
+          thumbnailUrl: `https://lh3.googleusercontent.com/d/${driveFile.id}=w300-h300`,
+          fullUrl: `https://drive.google.com/uc?id=${driveFile.id}&export=download`,
           driveId: driveFile.id,
           source: 'google-drive'
         });
@@ -85,7 +87,9 @@ export class PhotosService {
       const formattedDrivePhotos = drivePhotos.map(photo => ({
         id: photo.id,
         name: photo.name,
-        url: `https://drive.google.com/uc?id=${photo.id}&export=download`,
+        url: `https://lh3.googleusercontent.com/d/${photo.id}=w1000-h1000`,
+        thumbnailUrl: `https://lh3.googleusercontent.com/d/${photo.id}=w300-h300`,
+        fullUrl: `https://drive.google.com/uc?id=${photo.id}&export=download`,
         driveId: photo.id,
         source: 'google-drive',
         createdTime: photo.createdTime,

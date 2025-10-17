@@ -4,6 +4,8 @@ export declare class PhotosService {
         id: string;
         name: string;
         url: string;
+        thumbnailUrl: string;
+        fullUrl: string;
         driveId: string;
         source: string;
     }[]>;
@@ -12,6 +14,8 @@ export declare class PhotosService {
         id: string;
         name: string;
         url: string;
+        thumbnailUrl: string;
+        fullUrl: string;
         driveId: string;
         source: string;
         createdTime: string;

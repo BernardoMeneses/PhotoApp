@@ -32,6 +32,7 @@ export declare class GoogleDriveService {
         success: string[];
         failed: string[];
     }>;
+    ensureFileIsPublic(tokens: GoogleTokens, fileId: string): Promise<boolean>;
     getPhotoDownloadUrl(tokens: GoogleTokens, fileId: string): Promise<string>;
     validateTokens(tokens: GoogleTokens): Promise<boolean>;
     refreshTokens(refreshToken: string): Promise<GoogleTokens>;

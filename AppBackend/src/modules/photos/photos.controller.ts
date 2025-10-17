@@ -286,6 +286,21 @@ router.post("/disconnect-drive", authMiddleware, async (req: AuthenticatedReques
   }
 });
 
+// GET /photos/image/:fileId - Proxy para imagem do Google Drive
+router.get("/image/:fileId", async (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+    
+    // Redirecionar para a URL do thumbnail do Google Drive
+    const thumbnailUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000-h1000`;
+    
+    res.redirect(thumbnailUrl);
+  } catch (error: any) {
+    console.error("❌ Error serving image:", error.message);
+    res.status(500).json({ error: "Failed to serve image" });
+  }
+});
+
 export default router;
 
 

@@ -232,5 +232,16 @@ router.post("/disconnect-drive", auth_middleware_1.authMiddleware, async (req, r
         res.status(500).json({ error: "Failed to disconnect Google Drive" });
     }
 });
+router.get("/image/:fileId", async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const thumbnailUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000-h1000`;
+        res.redirect(thumbnailUrl);
+    }
+    catch (error) {
+        console.error("❌ Error serving image:", error.message);
+        res.status(500).json({ error: "Failed to serve image" });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=photos.controller.js.map

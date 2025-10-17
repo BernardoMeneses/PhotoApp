@@ -15,7 +15,6 @@ class GoogleDriveService {
             prompt: 'consent',
             redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI
         });
-        console.log('🔗 URL de autenticação gerada:', authUrl);
         return authUrl;
     }
     createDriveClient(tokens) {
@@ -23,18 +22,11 @@ class GoogleDriveService {
         return googleapis_1.google.drive({ version: 'v3', auth: this.oauth2Client });
     }
     async exchangeCodeForTokens(code) {
-        try {
-            const { tokens } = await this.oauth2Client.getToken({
-                code,
-                redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI
-            });
-            console.log('🔑 Tokens obtidos do Google:', tokens);
-            return tokens;
-        }
-        catch (error) {
-            console.error('❌ Erro ao trocar código por tokens:', error.message);
-            throw new Error('Failed to exchange code for tokens');
-        }
+        const { tokens } = await this.oauth2Client.getToken({
+            code,
+            redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI
+        });
+        return tokens;
     }
     async ensureAppFolder(tokens, folderName = 'PhotoApp') {
         const drive = this.createDriveClient(tokens);
@@ -83,9 +75,23 @@ class GoogleDriveService {
                 media: media,
                 fields: 'id, name, webViewLink, webContentLink'
             });
-            console.log(`📤 Foto '${fileName}' uploaded para Google Drive:`, response.data.id);
+            const fileId = response.data.id;
+            try {
+                await drive.permissions.create({
+                    fileId: fileId,
+                    requestBody: {
+                        role: 'reader',
+                        type: 'anyone'
+                    }
+                });
+                console.log(`🔓 Arquivo ${fileName} tornado público`);
+            }
+            catch (permError) {
+                console.warn(`⚠️ Não foi possível tornar o arquivo público: ${permError.message}`);
+            }
+            console.log(`📤 Foto '${fileName}' uploaded para Google Drive:`, fileId);
             return {
-                id: response.data.id,
+                id: fileId,
                 name: response.data.name,
                 webViewLink: response.data.webViewLink,
                 webContentLink: response.data.webContentLink
@@ -108,14 +114,21 @@ class GoogleDriveService {
                 orderBy: 'createdTime desc'
             });
             console.log(`📋 Encontradas ${response.data.files?.length || 0} fotos no Google Drive`);
-            return response.data.files?.map(file => ({
+            const files = response.data.files || [];
+            for (const file of files) {
+                if (file.id) {
+                    await this.ensureFileIsPublic(tokens, file.id);
+                }
+            }
+            return files.map(file => ({
                 id: file.id,
                 name: file.name,
-                webViewLink: file.webViewLink,
-                webContentLink: file.webContentLink,
+                webViewLink: `https://lh3.googleusercontent.com/d/${file.id}=w1000-h1000`,
+                webContentLink: file.webContentLink
+                    ?? `https://drive.google.com/uc?id=${file.id}&export=download`,
                 createdTime: file.createdTime,
                 size: file.size
-            })) || [];
+            }));
         }
         catch (error) {
             console.error('❌ Erro ao listar fotos do Google Drive:', error.message);
@@ -161,6 +174,33 @@ class GoogleDriveService {
             }
         }
         return results;
+    }
+    async ensureFileIsPublic(tokens, fileId) {
+        const drive = this.createDriveClient(tokens);
+        try {
+            const permissions = await drive.permissions.list({
+                fileId: fileId,
+                fields: 'permissions(id,type,role)'
+            });
+            const isPublic = permissions.data.permissions?.some(perm => perm.type === 'anyone' && perm.role === 'reader');
+            if (isPublic) {
+                console.log(`✅ Arquivo ${fileId} já é público`);
+                return true;
+            }
+            await drive.permissions.create({
+                fileId: fileId,
+                requestBody: {
+                    role: 'reader',
+                    type: 'anyone'
+                }
+            });
+            console.log(`🔓 Arquivo ${fileId} tornado público`);
+            return true;
+        }
+        catch (error) {
+            console.error(`❌ Erro ao tornar arquivo público ${fileId}:`, error.message);
+            return false;
+        }
     }
     async getPhotoDownloadUrl(tokens, fileId) {
         const drive = this.createDriveClient(tokens);

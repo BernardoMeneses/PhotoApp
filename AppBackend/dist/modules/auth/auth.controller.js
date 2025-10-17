@@ -84,37 +84,27 @@ router.post("/drive/login", auth_middleware_1.authMiddleware, async (req, res) =
         }
         const { code } = req.body;
         if (!code) {
-            const authUrl = google_drive_service_1.googleDriveService.getAuthUrl();
-            return res.status(200).json({
-                message: "Google Drive authentication URL generated",
-                authUrl: authUrl,
-                step: "auth_url"
-            });
+            return res.status(400).json({ error: "Authorization code is required in POST /auth/drive/login" });
         }
-        console.log("🔐 Processing Google Drive login with code...");
         const tokens = await google_drive_service_1.googleDriveService.exchangeCodeForTokens(code);
         await google_drive_token_service_1.GoogleDriveTokenService.saveTokens(req.user.uid, tokens);
-        const isValid = await google_drive_service_1.googleDriveService.validateTokens(tokens);
-        let photosCount = 0;
-        try {
-            const photos = await google_drive_service_1.googleDriveService.listPhotos(tokens);
-            photosCount = photos.length;
-        }
-        catch (photoError) {
-            console.warn("⚠️ Could not list photos after connection:", photoError);
-        }
         console.log("✅ Google Drive connected successfully");
-        res.status(200).json({
-            message: "Google Drive connected and ready",
-            connected: true,
-            valid: isValid,
-            photosFound: photosCount,
-            step: "completed"
-        });
+        res.status(200).json({ message: "Google Drive connected successfully", connected: true });
     }
     catch (error) {
-        console.error("❌ Error in Google Drive login:", error.message);
-        res.status(500).json({ error: "Failed to connect Google Drive: " + error.message });
+        console.error("❌ Google Drive login error:", error?.message || error);
+        res.status(500).json({ error: "Failed to authenticate with Google Drive" });
+    }
+});
+router.get("/drive/login", async (req, res) => {
+    try {
+        console.log("📥 Gerando URL de autenticação do Google Drive...");
+        const authUrl = google_drive_service_1.googleDriveService.getAuthUrl();
+        return res.status(200).json({ url: authUrl });
+    }
+    catch (error) {
+        console.error("❌ Error generating Google Drive auth URL:", error?.message || error);
+        res.status(500).json({ error: "Failed to generate auth URL" });
     }
 });
 router.get("/drive/status", auth_middleware_1.authMiddleware, async (req, res) => {
@@ -123,36 +113,37 @@ router.get("/drive/status", auth_middleware_1.authMiddleware, async (req, res) =
             return res.status(401).json({ error: "User not authenticated" });
         }
         const hasTokens = await google_drive_token_service_1.GoogleDriveTokenService.hasTokens(req.user.uid);
-        if (hasTokens) {
-            const tokens = await google_drive_token_service_1.GoogleDriveTokenService.loadTokens(req.user.uid);
-            const isValid = tokens ? await google_drive_service_1.googleDriveService.validateTokens(tokens) : false;
-            let photosCount = 0;
-            if (isValid && tokens) {
-                try {
-                    const photos = await google_drive_service_1.googleDriveService.listPhotos(tokens);
-                    photosCount = photos.length;
-                }
-                catch (error) {
-                    console.warn("⚠️ Could not count photos:", error);
-                }
-            }
-            res.status(200).json({
-                connected: true,
-                valid: isValid,
-                photosCount: photosCount
-            });
-        }
-        else {
-            res.status(200).json({
+        if (!hasTokens) {
+            return res.status(200).json({
                 connected: false,
-                valid: false,
-                photosCount: 0
+                valid: false
             });
         }
+        const tokens = await google_drive_token_service_1.GoogleDriveTokenService.loadTokens(req.user.uid);
+        const isValid = tokens ? await google_drive_service_1.googleDriveService.validateTokens(tokens) : false;
+        res.status(200).json({
+            connected: true,
+            valid: isValid
+        });
     }
     catch (error) {
         console.error("❌ Error checking Google Drive status:", error.message);
         res.status(500).json({ error: "Failed to check Google Drive status" });
+    }
+});
+router.get("/drive/callback", async (req, res) => {
+    try {
+        const code = req.query.code;
+        if (!code) {
+            return res.status(400).send("Missing authorization code");
+        }
+        console.log("📥 Código OAuth recebido:", code);
+        const redirectUrl = `photoapp://drive-auth?code=${code}`;
+        res.redirect(redirectUrl);
+    }
+    catch (error) {
+        console.error("❌ Erro no callback do Google Drive:", error.message);
+        res.status(500).send("Google Drive OAuth callback failed");
     }
 });
 router.post("/drive/disconnect", auth_middleware_1.authMiddleware, async (req, res) => {
@@ -169,77 +160,6 @@ router.post("/drive/disconnect", auth_middleware_1.authMiddleware, async (req, r
     catch (error) {
         console.error("❌ Error disconnecting Google Drive:", error.message);
         res.status(500).json({ error: "Failed to disconnect Google Drive" });
-    }
-});
-router.get("/drive/photos", auth_middleware_1.authMiddleware, async (req, res) => {
-    try {
-        if (!req.user?.uid) {
-            return res.status(401).json({ error: "User not authenticated" });
-        }
-        const tokens = await google_drive_token_service_1.GoogleDriveTokenService.loadTokens(req.user.uid);
-        if (!tokens) {
-            return res.status(400).json({ error: "Google Drive not connected" });
-        }
-        const photos = await google_drive_service_1.googleDriveService.listPhotos(tokens);
-        res.status(200).json({
-            message: "Google Drive photos retrieved successfully",
-            photos: photos
-        });
-    }
-    catch (error) {
-        console.error("❌ Error listing Google Drive photos:", error.message);
-        res.status(500).json({ error: "Failed to list Google Drive photos" });
-    }
-});
-router.post("/drive/photos/delete", auth_middleware_1.authMiddleware, async (req, res) => {
-    try {
-        if (!req.user?.uid) {
-            return res.status(401).json({ error: "User not authenticated" });
-        }
-        const { fileId } = req.body;
-        if (!fileId) {
-            return res.status(400).json({ error: "File ID is required" });
-        }
-        const tokens = await google_drive_token_service_1.GoogleDriveTokenService.loadTokens(req.user.uid);
-        if (!tokens) {
-            return res.status(400).json({ error: "Google Drive not connected" });
-        }
-        const deleted = await google_drive_service_1.googleDriveService.deletePhoto(tokens, fileId);
-        if (deleted) {
-            res.status(200).json({ message: "Photo deleted from Google Drive successfully" });
-        }
-        else {
-            res.status(404).json({ error: "Photo not found or failed to delete" });
-        }
-    }
-    catch (error) {
-        console.error("❌ Error deleting Google Drive photo:", error.message);
-        res.status(500).json({ error: "Failed to delete Google Drive photo" });
-    }
-});
-router.post("/drive/photos/batch-delete", auth_middleware_1.authMiddleware, async (req, res) => {
-    try {
-        if (!req.user?.uid) {
-            return res.status(401).json({ error: "User not authenticated" });
-        }
-        const { fileIds } = req.body;
-        if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
-            return res.status(400).json({ error: "File IDs array is required and must not be empty" });
-        }
-        const tokens = await google_drive_token_service_1.GoogleDriveTokenService.loadTokens(req.user.uid);
-        if (!tokens) {
-            return res.status(400).json({ error: "Google Drive not connected" });
-        }
-        const results = await google_drive_service_1.googleDriveService.batchDeletePhotos(tokens, fileIds);
-        res.status(200).json({
-            message: `Batch delete completed. Success: ${results.success.length}, Failed: ${results.failed.length}`,
-            success: results.success,
-            failed: results.failed
-        });
-    }
-    catch (error) {
-        console.error("❌ Error batch deleting Google Drive photos:", error.message);
-        res.status(500).json({ error: "Failed to batch delete Google Drive photos" });
     }
 });
 exports.default = router;
