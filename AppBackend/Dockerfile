@@ -1,23 +1,33 @@
-# Usa uma imagem base leve e moderna do Node.js
-FROM node:20-alpine
+# Etapa 1: build TypeScript
+FROM node:20-alpine AS builder
 
-# Define o diretório de trabalho
 WORKDIR /usr/src/app
 
-# Copia apenas os ficheiros de dependências primeiro (para usar cache Docker)
+# Copia package.json e instala TUDO (incluindo devDependencies)
 COPY package*.json ./
-
-# Instala dependências de produção e de build
 RUN npm install
 
 # Copia o resto do código
 COPY . .
 
-# Compila o código TypeScript
-RUN npm run build
+# Compila o projeto TypeScript
+RUN npx tsc
 
-# Expõe a porta (CapRover injeta automaticamente a variável PORT)
+# Etapa 2: imagem final (produção)
+FROM node:20-alpine AS production
+
+WORKDIR /usr/src/app
+
+# Copia apenas o necessário da fase de build
+COPY package*.json ./
+RUN npm install --omit=dev
+
+# Copia os ficheiros compilados da etapa anterior
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Expor a porta
 EXPOSE 3000
 
-# Comando de arranque da app
-CMD ["npm", "start"]
+# Comando de arranque
+CMD ["node", "dist/main.js"]
+
