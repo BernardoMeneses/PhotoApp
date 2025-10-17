@@ -7,7 +7,7 @@ RUN npm install
 COPY . .
 
 # Aumenta memória para o compilador TypeScript
-RUN node --max-old-space-size=2048 node_modules/typescript/bin/tsc
+RUN node --max-old-space-size=1024 node_modules/typescript/bin/tsc
 
 FROM node:20-alpine AS production
 WORKDIR /usr/src/app
