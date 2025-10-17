@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 
 # Copia package.json e instala TUDO (incluindo devDependencies)
 COPY package*.json ./
-RUN npm install
+RUN npm install typescript
 
 # Copia o resto do código
 COPY . .
