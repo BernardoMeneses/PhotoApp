@@ -25,14 +25,14 @@ export class GoogleDriveService {
    * Gerar URL de autenticação do Google
    */
   getAuthUrl(): string {
-  const authUrl = this.oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: this.SCOPES,
-    prompt: 'consent',
-    redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // ✅ manter
-  });
-  return authUrl;
-}
+    const authUrl = this.oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: this.SCOPES,
+      prompt: 'consent',
+      redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // ✅ manter
+    });
+    return authUrl;
+  }
 
   /**
    * Criar cliente do Google Drive com tokens do usuário
@@ -46,12 +46,12 @@ export class GoogleDriveService {
    * Trocar authorization code por access_token e refresh_token
    */
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
-  const { tokens } = await this.oauth2Client.getToken({
-    code,
-    redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // ✅ manter
-  });
-  return tokens;
-}
+    const { tokens } = await this.oauth2Client.getToken({
+      code,
+      redirect_uri: process.env.GOOGLE_DRIVE_REDIRECT_URI // ✅ manter
+    });
+    return tokens;
+  }
 
   /**
    * Encontrar ou criar pasta do app no Google Drive
@@ -62,7 +62,7 @@ export class GoogleDriveService {
     try {
       // Procurar pasta existente
       const query = `mimeType = 'application/vnd.google-apps.folder' and name = '${folderName}' and trashed = false`;
-      
+
       const response = await drive.files.list({
         q: query,
         fields: 'files(id, name)',
@@ -95,9 +95,9 @@ export class GoogleDriveService {
    * Upload de foto para Google Drive
    */
   async uploadPhoto(
-    tokens: GoogleTokens, 
-    fileName: string, 
-    fileBuffer: Buffer, 
+    tokens: GoogleTokens,
+    fileName: string,
+    fileBuffer: Buffer,
     mimeType: string,
     folderId?: string
   ): Promise<{ id: string; name: string; webViewLink: string; webContentLink: string }> {
@@ -170,11 +170,14 @@ export class GoogleDriveService {
       return response.data.files?.map(file => ({
         id: file.id!,
         name: file.name!,
+        // 👇 usa webContentLink (link de download direto)
         webViewLink: file.webViewLink!,
-        webContentLink: file.webContentLink!,
+        webContentLink: file.webContentLink
+          ?? `https://drive.google.com/uc?id=${file.id}&export=download`,
         createdTime: file.createdTime!,
         size: file.size!
       })) || [];
+
     } catch (error: any) {
       console.error('❌ Erro ao listar fotos do Google Drive:', error.message);
       throw new Error('Failed to list photos from Google Drive');
@@ -280,7 +283,7 @@ export class GoogleDriveService {
 
       const { credentials } = await this.oauth2Client.refreshAccessToken();
       console.log('🔄 Tokens refreshed com sucesso');
-      
+
       return credentials;
     } catch (error: any) {
       console.error('❌ Erro ao refresh tokens:', error.message);
