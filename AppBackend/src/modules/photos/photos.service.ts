@@ -184,8 +184,8 @@ export class PhotosService {
   }
 
   // Deletar múltiplas fotos de uma vez - APENAS GOOGLE DRIVE
-  async batchDeletePhotos(photoIds: string[], userId: string): Promise<{ success: string[], failed: string[] }> {
-    console.log(`🗑️ Deletando ${photoIds.length} fotos em lote do Google Drive`);
+  async batchDeletePhotos(photoIdentifiers: string[], userId: string): Promise<{ success: string[], failed: string[] }> {
+    console.log(`🗑️ Deletando ${photoIdentifiers.length} fotos em lote do Google Drive`);
 
     // Verificar se o usuário tem tokens do Google Drive
     const hasGoogleDriveTokens = await GoogleDriveTokenService.hasTokens(userId);
@@ -200,7 +200,48 @@ export class PhotosService {
     }
 
     try {
+      // Primeiro, listar todas as fotos do usuário para mapear nomes para IDs
+      const userPhotos = await googleDriveService.listPhotos(tokens);
+      const photoMap = new Map<string, string>(); // name -> id
+      
+      for (const photo of userPhotos) {
+        photoMap.set(photo.name, photo.id);
+      }
+
+      console.log(`📋 Mapeadas ${photoMap.size} fotos do usuário`);
+
+      // Converter identificadores (nomes ou IDs) para IDs válidos
+      const photoIds: string[] = [];
+      const notFound: string[] = [];
+
+      for (const identifier of photoIdentifiers) {
+        // Verificar se é um ID direto (Google Drive IDs são alphanumeric com hífens/underscores)
+        if (identifier.match(/^[a-zA-Z0-9_-]+$/)) {
+          // Pode ser um ID, verificar se existe
+          const foundById = userPhotos.find(photo => photo.id === identifier);
+          if (foundById) {
+            photoIds.push(identifier);
+            continue;
+          }
+        }
+
+        // Tentar buscar por nome
+        const photoId = photoMap.get(identifier);
+        if (photoId) {
+          photoIds.push(photoId);
+        } else {
+          console.warn(`⚠️ Foto não encontrada: ${identifier}`);
+          notFound.push(identifier);
+        }
+      }
+
+      console.log(`🎯 Encontrados ${photoIds.length} IDs válidos para deletar`);
+      console.log(`❌ ${notFound.length} fotos não encontradas`);
+
       const result = await googleDriveService.batchDeletePhotos(tokens, photoIds);
+      
+      // Adicionar fotos não encontradas aos failed
+      result.failed.push(...notFound);
       
       console.log(`✅ ${result.success.length} fotos deletadas com sucesso`);
       console.log(`❌ ${result.failed.length} fotos falharam`);
@@ -210,23 +251,46 @@ export class PhotosService {
     } catch (error: any) {
       console.error('❌ Erro no batch delete:', error.message);
       
-      // Fallback: deletar uma por uma
+      // Fallback: deletar uma por uma usando método individual que já resolve nomes
       const results = {
         success: [] as string[],
         failed: [] as string[]
       };
 
-      for (const photoId of photoIds) {
+      for (const identifier of photoIdentifiers) {
         try {
-          const deleted = await this.deleteUserPhoto(photoId, userId);
+          // Primeiro tentar como ID direto
+          let deleted = false;
+          if (identifier.match(/^[a-zA-Z0-9_-]+$/)) {
+            try {
+              deleted = await this.deleteUserPhoto(identifier, userId);
+            } catch (error) {
+              // Se falhar como ID, tentar como nome
+              deleted = false;
+            }
+          }
+
+          // Se não funcionou como ID, tentar buscar por nome
+          if (!deleted) {
+            try {
+              const userPhotos = await googleDriveService.listPhotos(tokens);
+              const photo = userPhotos.find(p => p.name === identifier);
+              if (photo) {
+                deleted = await this.deleteUserPhoto(photo.id, userId);
+              }
+            } catch (error) {
+              console.error(`❌ Erro ao buscar foto por nome ${identifier}:`, error);
+            }
+          }
+
           if (deleted) {
-            results.success.push(photoId);
+            results.success.push(identifier);
           } else {
-            results.failed.push(photoId);
+            results.failed.push(identifier);
           }
         } catch (error) {
-          console.error(`❌ Falha ao deletar ${photoId}:`, error);
-          results.failed.push(photoId);
+          console.error(`❌ Falha ao deletar ${identifier}:`, error);
+          results.failed.push(identifier);
         }
       }
 

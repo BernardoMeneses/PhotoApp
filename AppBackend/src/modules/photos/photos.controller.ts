@@ -172,6 +172,7 @@ router.post("/batch-delete", authMiddleware, async (req: AuthenticatedRequest, r
     }
     
     console.log(`🗑️ Batch deleting ${photoNames.length} photos for user ${req.user.uid}`);
+    console.log(`📋 Photo identifiers (names or IDs):`, photoNames);
     
     const results = await photosService.batchDeletePhotos(photoNames, req.user.uid);
 
