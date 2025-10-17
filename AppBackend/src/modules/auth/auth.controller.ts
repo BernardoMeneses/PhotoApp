@@ -108,6 +108,7 @@ router.post("/link-google", async (req, res) => {
  * POST /auth/drive/login - Login completo ao Google Drive
  * Recebe o código de autorização e conecta automaticamente
  */
+// POST handles exchange (expects code in body)
 router.post("/drive/login", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
@@ -116,30 +117,35 @@ router.post("/drive/login", authMiddleware, async (req: AuthenticatedRequest, re
 
     const { code } = req.body;
 
-    // Sem código → retorna URL de autenticação
     if (!code) {
-      const authUrl = googleDriveService.getAuthUrl();
-      return res.status(200).json({ 
-        message: "Google Drive authentication URL generated",
-        authUrl 
-      });
+      return res.status(400).json({ error: "Authorization code is required in POST /auth/drive/login" });
     }
 
-    // Com código → processa autenticação
-    console.log("🔗 Processing Google Drive authentication...");
-    
+    // Exchange code for tokens and save
     const tokens = await googleDriveService.exchangeCodeForTokens(code);
     await GoogleDriveTokenService.saveTokens(req.user.uid, tokens);
 
     console.log("✅ Google Drive connected successfully");
-    
-    res.status(200).json({ 
-      message: "Google Drive connected successfully",
-      connected: true 
-    });
+
+    res.status(200).json({ message: "Google Drive connected successfully", connected: true });
   } catch (error: any) {
-    console.error("❌ Google Drive login error:", error.message);
+    console.error("❌ Google Drive login error:", error?.message || error);
     res.status(500).json({ error: "Failed to authenticate with Google Drive" });
+  }
+});
+
+// GET returns the auth URL so the mobile/web client can redirect the user
+router.get("/drive/login", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user?.uid) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const authUrl = googleDriveService.getAuthUrl();
+    return res.status(200).json({ url: authUrl });
+  } catch (error: any) {
+    console.error("❌ Error generating Google Drive auth URL:", error?.message || error);
+    res.status(500).json({ error: "Failed to generate auth URL" });
   }
 });
 
