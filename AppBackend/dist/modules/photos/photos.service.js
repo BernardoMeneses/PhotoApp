@@ -135,8 +135,8 @@ class PhotosService {
         }
         return grouped;
     }
-    async batchDeletePhotos(photoIds, userId) {
-        console.log(`🗑️ Deletando ${photoIds.length} fotos em lote do Google Drive`);
+    async batchDeletePhotos(photoIdentifiers, userId) {
+        console.log(`🗑️ Deletando ${photoIdentifiers.length} fotos em lote do Google Drive`);
         const hasGoogleDriveTokens = await google_drive_token_service_1.GoogleDriveTokenService.hasTokens(userId);
         if (!hasGoogleDriveTokens) {
             throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
@@ -146,7 +146,35 @@ class PhotosService {
             throw new Error("Falha ao carregar tokens do Google Drive");
         }
         try {
+            const userPhotos = await google_drive_service_1.googleDriveService.listPhotos(tokens);
+            const photoMap = new Map();
+            for (const photo of userPhotos) {
+                photoMap.set(photo.name, photo.id);
+            }
+            console.log(`📋 Mapeadas ${photoMap.size} fotos do usuário`);
+            const photoIds = [];
+            const notFound = [];
+            for (const identifier of photoIdentifiers) {
+                if (identifier.match(/^[a-zA-Z0-9_-]+$/)) {
+                    const foundById = userPhotos.find(photo => photo.id === identifier);
+                    if (foundById) {
+                        photoIds.push(identifier);
+                        continue;
+                    }
+                }
+                const photoId = photoMap.get(identifier);
+                if (photoId) {
+                    photoIds.push(photoId);
+                }
+                else {
+                    console.warn(`⚠️ Foto não encontrada: ${identifier}`);
+                    notFound.push(identifier);
+                }
+            }
+            console.log(`🎯 Encontrados ${photoIds.length} IDs válidos para deletar`);
+            console.log(`❌ ${notFound.length} fotos não encontradas`);
             const result = await google_drive_service_1.googleDriveService.batchDeletePhotos(tokens, photoIds);
+            result.failed.push(...notFound);
             console.log(`✅ ${result.success.length} fotos deletadas com sucesso`);
             console.log(`❌ ${result.failed.length} fotos falharam`);
             return result;
@@ -157,19 +185,39 @@ class PhotosService {
                 success: [],
                 failed: []
             };
-            for (const photoId of photoIds) {
+            for (const identifier of photoIdentifiers) {
                 try {
-                    const deleted = await this.deleteUserPhoto(photoId, userId);
+                    let deleted = false;
+                    if (identifier.match(/^[a-zA-Z0-9_-]+$/)) {
+                        try {
+                            deleted = await this.deleteUserPhoto(identifier, userId);
+                        }
+                        catch (error) {
+                            deleted = false;
+                        }
+                    }
+                    if (!deleted) {
+                        try {
+                            const userPhotos = await google_drive_service_1.googleDriveService.listPhotos(tokens);
+                            const photo = userPhotos.find(p => p.name === identifier);
+                            if (photo) {
+                                deleted = await this.deleteUserPhoto(photo.id, userId);
+                            }
+                        }
+                        catch (error) {
+                            console.error(`❌ Erro ao buscar foto por nome ${identifier}:`, error);
+                        }
+                    }
                     if (deleted) {
-                        results.success.push(photoId);
+                        results.success.push(identifier);
                     }
                     else {
-                        results.failed.push(photoId);
+                        results.failed.push(identifier);
                     }
                 }
                 catch (error) {
-                    console.error(`❌ Falha ao deletar ${photoId}:`, error);
-                    results.failed.push(photoId);
+                    console.error(`❌ Falha ao deletar ${identifier}:`, error);
+                    results.failed.push(identifier);
                 }
             }
             return results;

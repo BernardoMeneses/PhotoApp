@@ -65,22 +65,6 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res: Response
     console.log("📁 Creating album for user:", req.user.uid);
     console.log("📝 Album data:", { title, hexcolor, year, coverimage, categoryId });
 
-    // Se não foi fornecida uma imagem de capa, tentar obter uma foto aleatória do usuário
-    let finalCoverImage = coverimage;
-    if (!finalCoverImage) {
-      try {
-        const userPhotos = await photosService.listUserPhotos(req.user.uid);
-        if (userPhotos.length > 0) {
-          // Escolher uma foto aleatória
-          const randomIndex = Math.floor(Math.random() * userPhotos.length);
-          finalCoverImage = userPhotos[randomIndex].url;
-          console.log("🎲 Using random user photo as cover:", finalCoverImage);
-        }
-      } catch (photoError) {
-        console.log("⚠️ Could not get user photos for cover, using color only");
-      }
-    }
-
     const album = await albumsService.createAlbum(
       req.user.uid, 
       req.user.email, // Email do Firebase Auth
@@ -88,7 +72,7 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res: Response
         title,
         hexcolor,
         year,
-        coverimage: finalCoverImage,
+        coverimage: coverimage || null,
         categoryId: categoryId && categoryId !== "" ? categoryId : undefined
       }
     );

@@ -24,7 +24,7 @@ export declare class PhotosService {
     deleteUserPhoto(photoId: string, userId: string): Promise<boolean>;
     deletePhotoByUrl(photoUrl: string, userId: string): Promise<boolean>;
     listLibraryPhotos(userId: string): Promise<Record<string, Record<string, Record<string, any[]>>>>;
-    batchDeletePhotos(photoIds: string[], userId: string): Promise<{
+    batchDeletePhotos(photoIdentifiers: string[], userId: string): Promise<{
         success: string[];
         failed: string[];
     }>;

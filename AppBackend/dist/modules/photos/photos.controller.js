@@ -141,6 +141,7 @@ router.post("/batch-delete", auth_middleware_1.authMiddleware, async (req, res) 
             return res.status(401).json({ error: "User not authenticated" });
         }
         console.log(`🗑️ Batch deleting ${photoNames.length} photos for user ${req.user.uid}`);
+        console.log(`📋 Photo identifiers (names or IDs):`, photoNames);
         const results = await photosService.batchDeletePhotos(photoNames, req.user.uid);
         res.status(200).json({
             message: `Batch delete completed. Success: ${results.success.length}, Failed: ${results.failed.length}`,
