@@ -669,6 +669,101 @@ paths:
       responses:
         '200':
           description: Photo removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /albums/{id}/categories:
+    get:
+      tags:
+        - Albums
+      summary: Get album with categories (auth required)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Album with categories information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      title:
+                        type: string
+                      hexcolor:
+                        type: string
+                      year:
+                        type: integer
+                      coverimage:
+                        type: string
+                      categories:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+        '404':
+          description: Album not found
+        '401':
+          description: User not authenticated
+  /albums/{id}/size:
+    get:
+      tags:
+        - Albums
+      summary: Get album total size (auth required)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Album total size information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      totalSize:
+                        type: integer
+                        description: Total size in bytes
+                      photoCount:
+                        type: integer
+                        description: Number of photos in album
+                      formattedSize:
+                        type: string
+                        description: Human readable size (e.g., "15 MB")
+        '404':
+          description: Album not found
+        '401':
+          description: User not authenticated
   /categories:
     post:
       tags:
