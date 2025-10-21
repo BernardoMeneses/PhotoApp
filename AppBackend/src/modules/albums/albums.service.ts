@@ -432,6 +432,80 @@ async batchAddPhotosToAlbum(
   return results;
 }
 
+/**
+ * Calcular o tamanho total de um álbum
+ */
+async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: number, photoCount: number, formattedSize: string }> {
+  try {
+    console.log(`📊 Calculating total size for album ${albumId} of user ${userId}`);
+    
+    // Verificar se o álbum existe e pertence ao usuário
+    const album = await this.getAlbumById(albumId, userId);
+    if (!album) {
+      throw new Error('Album not found or access denied');
+    }
+
+    // Obter as fotos do álbum
+    const albumPhotos = await this.getAlbumPhotos(albumId, userId);
+    
+    if (albumPhotos.length === 0) {
+      return {
+        totalSize: 0,
+        photoCount: 0,
+        formattedSize: '0 B'
+      };
+    }
+
+    // Importar PhotosService para obter informações das fotos com tamanhos
+    const { PhotosService } = await import('../photos/photos.service');
+    const photosService = new PhotosService();
+    
+    // Obter todas as fotos do usuário com informações de tamanho
+    const userPhotos = await photosService.listUserPhotos(userId);
+    
+    // Criar um map para lookup rápido por nome da foto
+    const photoSizeMap = new Map();
+    userPhotos.forEach(photo => {
+      photoSizeMap.set(photo.name, parseInt(photo.size) || 0);
+    });
+
+    // Calcular tamanho total
+    let totalSize = 0;
+    albumPhotos.forEach(albumPhoto => {
+      const photoSize = photoSizeMap.get(albumPhoto.photo_name) || 0;
+      totalSize += photoSize;
+    });
+
+    // Formatar o tamanho para legibilidade
+    const formattedSize = this.formatBytes(totalSize);
+
+    console.log(`✅ Album ${albumId} total size: ${formattedSize} (${albumPhotos.length} photos)`);
+
+    return {
+      totalSize,
+      photoCount: albumPhotos.length,
+      formattedSize
+    };
+
+  } catch (error: any) {
+    console.error('❌ Error calculating album total size:', error.message);
+    throw new Error(`Failed to calculate album size: ${error.message}`);
+  }
+}
+
+/**
+ * Formatar bytes em formato legível
+ */
+private formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
   /**
    * Fechar conexão com a base de dados
    */

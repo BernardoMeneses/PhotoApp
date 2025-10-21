@@ -274,9 +274,16 @@ router.get("/test/status", (req: AuthenticatedRequest, res: Response) => {
     availableEndpoints: [
       "POST /albums - Create album (requires auth)",
       "GET /albums - Get user albums (requires auth)",
+      "GET /albums/simple - Get user albums without categories (requires auth)",
       "GET /albums/:id - Get specific album (requires auth)",
       "PUT /albums/:id - Update album (requires auth)",
-      "DELETE /albums/:id - Delete album (requires auth)",
+      "POST /albums/:id/delete - Delete album (requires auth)",
+      "POST /albums/:id/photos - Add photo to album (requires auth)",
+      "POST /albums/:id/photos/batch - Batch add photos to album (requires auth)",
+      "GET /albums/:id/photos - Get album photos (requires auth)",
+      "POST /albums/:id/photos/:photoName/remove - Remove photo from album (requires auth)",
+      "GET /albums/:id/categories - Get album with categories (requires auth)",
+      "GET /albums/:id/size - Get album total size (requires auth)",
       "GET /albums/test/status - Test endpoint"
     ],
     authRequired: "Bearer <firebase_token>"
@@ -401,6 +408,36 @@ router.get("/:id/categories", authMiddleware, async (req: AuthenticatedRequest, 
     });
   } catch (error: any) {
     console.error("❌ Get album categories error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /albums/:id/size - Obter o tamanho total de um álbum
+ * Requer autenticação: Bearer token
+ */
+router.get("/:id/size", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user?.uid) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const albumId = parseInt(req.params.id);
+    if (isNaN(albumId)) {
+      return res.status(400).json({ error: "Invalid album ID" });
+    }
+
+    console.log(`📊 Getting total size for album ${albumId} of user ${req.user.uid}`);
+
+    const sizeInfo = await albumsService.getAlbumTotalSize(albumId, req.user.uid);
+
+    res.json({
+      message: "Album size calculated successfully",
+      data: sizeInfo
+    });
+
+  } catch (error: any) {
+    console.error("❌ Get album size error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
