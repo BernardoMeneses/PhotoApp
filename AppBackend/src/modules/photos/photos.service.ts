@@ -275,6 +275,22 @@ export class PhotosService {
       const deleted = await googleDriveService.deletePhoto(tokens, photoId);
       
       if (deleted) {
+        // ✅ NOVO: Remover também da base de dados
+        const client = await pool.connect();
+        try {
+          await client.query(`
+            DELETE FROM photo_metadata 
+            WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2)
+          `, [userId, photoId]);
+          
+          console.log(`🗑️ Foto ${photoId} removida da base de dados`);
+        } catch (dbError: any) {
+          console.error('❌ Erro ao remover foto da base de dados:', dbError.message);
+          // Não falhar a operação - a foto já foi deletada do Drive
+        } finally {
+          client.release();
+        }
+        
         console.log(`✅ Foto ${photoId} deletada com sucesso do Google Drive`);
         return true;
       } else {
@@ -363,6 +379,33 @@ export class PhotosService {
       console.log(`❌ ${notFound.length} fotos não encontradas`);
 
       const result = await googleDriveService.batchDeletePhotos(tokens, photoIds);
+      
+      // ✅ NOVO: Remover fotos deletadas com sucesso da base de dados
+      if (result.success.length > 0) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          
+          for (const deletedPhotoId of result.success) {
+            // Deletar da photo_metadata usando photo_id ou photo_name
+            await client.query(`
+              DELETE FROM photo_metadata 
+              WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2)
+            `, [userId, deletedPhotoId]);
+            
+            console.log(`🗑️ Removida foto ${deletedPhotoId} da base de dados`);
+          }
+          
+          await client.query('COMMIT');
+          console.log(`✅ ${result.success.length} fotos removidas da base de dados`);
+        } catch (dbError: any) {
+          await client.query('ROLLBACK');
+          console.error('❌ Erro ao remover fotos da base de dados:', dbError.message);
+          // Não falhar a operação inteira por erro da BD - as fotos já foram deletadas do Drive
+        } finally {
+          client.release();
+        }
+      }
       
       // Adicionar fotos não encontradas aos failed
       result.failed.push(...notFound);
