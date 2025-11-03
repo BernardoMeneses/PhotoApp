@@ -368,19 +368,19 @@ export class AlbumsService {
       `;
       const insertResult = await client.query(insertQuery, [albumId, userId, photoName, photoUrl]);
 
-      // 2. Atualizar status da foto de 'unsorted' para 'album' na photo_metadata
+      // 2. Atualizar status da foto de 'unsorted' ou 'library' para 'album' na photo_metadata
       // O photoName pode ser tanto photo_id como photo_name, então verificamos ambos
       const updateQuery = `
         UPDATE photo_metadata 
         SET status = 'album', moved_to_library_at = NOW(), updated_at = NOW()
-        WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status = 'unsorted'
+        WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status IN ('unsorted', 'library')
       `;
       const updateResult = await client.query(updateQuery, [userId, photoName]);
 
       await client.query('COMMIT');
       
       console.log(`✅ Photo ${photoName} added to album ${albumId} and status updated to album`);
-      console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata`);
+      console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata (from unsorted/library to album)`);
       
       return insertResult.rows[0];
     } catch (error: any) {
