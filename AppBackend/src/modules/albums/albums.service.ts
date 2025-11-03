@@ -418,17 +418,17 @@ async removePhotoFromAlbum(albumId: number, userId: string, photoName: string) {
     `;
     const deleteResult = await client.query(deleteQuery, [albumId, userId, photoName]);
 
-    // 2. Voltar status da foto para 'unsorted' na photo_metadata
+    // 2. Voltar status da foto para 'library' na photo_metadata (não unsorted!)
     const updateQuery = `
       UPDATE photo_metadata 
-      SET status = 'unsorted', moved_to_library_at = NULL, updated_at = NOW()
+      SET status = 'library', updated_at = NOW()
       WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status = 'album'
     `;
     const updateResult = await client.query(updateQuery, [userId, photoName]);
 
     await client.query('COMMIT');
     
-    console.log(`✅ Photo ${photoName} removed from album ${albumId} and status updated to unsorted`);
+    console.log(`✅ Photo ${photoName} removed from album ${albumId} and status updated to library`);
     console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata`);
     
     return deleteResult.rowCount !== null && deleteResult.rowCount > 0;
