@@ -62,7 +62,75 @@ router.post(
   }
 );
 
-// Listar fotos do usuário (requer autenticação)
+// ========================================
+// ROTAS PARA UNSORTED/LIBRARY WORKFLOW
+// ========================================
+
+// Listar fotos UNSORTED (por trabalhar)
+router.get("/unsorted", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const unsortedPhotos = await photosService.listUnsortedPhotos(req.user.uid);
+    res.status(200).json({
+      message: `Found ${unsortedPhotos.length} unsorted photos`,
+      photos: unsortedPhotos
+    });
+  } catch (error: any) {
+    console.error("Error listing unsorted photos:", error.message);
+    res.status(500).json({ error: "Failed to list unsorted photos: " + error.message });
+  }
+});
+
+// Listar fotos da LIBRARY (organizadas por ano/mês/dia)
+router.get("/library", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const libraryPhotos = await photosService.listLibraryPhotos(req.user.uid);
+    res.status(200).json({
+      message: "Library photos organized by date",
+      photos: libraryPhotos
+    });
+  } catch (error: any) {
+    console.error("Error listing library photos:", error.message);
+    res.status(500).json({ error: "Failed to list library photos: " + error.message });
+  }
+});
+
+// Mover fotos de UNSORTED para LIBRARY
+router.post("/move-to-library", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const { photoIds } = req.body;
+    
+    if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+      return res.status(400).json({ error: "photoIds array is required and must not be empty" });
+    }
+
+    console.log(`📚 Moving ${photoIds.length} photos to library for user: ${req.user.uid}`);
+
+    const result = await photosService.movePhotosToLibrary(req.user.uid, photoIds);
+    
+    res.status(200).json({
+      message: `Successfully moved ${result.moved} photos to library`,
+      moved: result.moved,
+      photoIds: photoIds
+    });
+  } catch (error: any) {
+    console.error("Error moving photos to library:", error.message);
+    res.status(500).json({ error: "Failed to move photos to library: " + error.message });
+  }
+});
+
+// Listar fotos do usuário (TODAS - para compatibilidade)
 router.get("/", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
