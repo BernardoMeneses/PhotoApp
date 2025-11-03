@@ -115,7 +115,7 @@ export class PhotosService {
   // ========================================
 
   // Guardar metadados da foto na base de dados
-  async savePhotoMetadata(userId: string, photoId: string, photoName: string, photoUrl: string, status: 'unsorted' | 'library' = 'unsorted') {
+  async savePhotoMetadata(userId: string, photoId: string, photoName: string, photoUrl: string, status: 'unsorted' | 'library' | 'album' = 'unsorted') {
     const client = await pool.connect();
     try {
       await client.query(`

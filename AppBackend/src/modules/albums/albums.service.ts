@@ -356,14 +356,41 @@ export class AlbumsService {
    * Adicionar uma foto a um álbum
    */
   async addPhotoToAlbum(albumId: number, userId: string, photoName: string, photoUrl: string) {
-  const query = `
-    INSERT INTO albumphotos (album_id, user_id, photo_name, photo_url)
-    VALUES ($1, $2, $3, $4)
-    RETURNING *;
-  `;
-  const result = await pool.query(query, [albumId, userId, photoName, photoUrl]);
-  return result.rows[0];
-}
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Adicionar foto ao álbum
+      const insertQuery = `
+        INSERT INTO albumphotos (album_id, user_id, photo_name, photo_url)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *;
+      `;
+      const insertResult = await client.query(insertQuery, [albumId, userId, photoName, photoUrl]);
+
+      // 2. Atualizar status da foto de 'unsorted' para 'album' na photo_metadata
+      // O photoName pode ser tanto photo_id como photo_name, então verificamos ambos
+      const updateQuery = `
+        UPDATE photo_metadata 
+        SET status = 'album', moved_to_library_at = NOW(), updated_at = NOW()
+        WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status = 'unsorted'
+      `;
+      const updateResult = await client.query(updateQuery, [userId, photoName]);
+
+      await client.query('COMMIT');
+      
+      console.log(`✅ Photo ${photoName} added to album ${albumId} and status updated to album`);
+      console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata`);
+      
+      return insertResult.rows[0];
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('❌ Error adding photo to album:', error.message);
+      throw new Error(`Failed to add photo to album: ${error.message}`);
+    } finally {
+      client.release();
+    }
+  }
 /**
  * Obter as fotos de um álbum
  */
@@ -380,12 +407,38 @@ async getAlbumPhotos(albumId: number, userId: string) {
  * Remover uma foto de um álbum
  */
 async removePhotoFromAlbum(albumId: number, userId: string, photoName: string) {
-  const query = `
-    DELETE FROM albumphotos
-    WHERE album_id = $1 AND user_id = $2 AND photo_name = $3
-  `;
-  const result = await pool.query(query, [albumId, userId, photoName]);
-  return result.rowCount !== null && result.rowCount > 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Remover foto do álbum
+    const deleteQuery = `
+      DELETE FROM albumphotos
+      WHERE album_id = $1 AND user_id = $2 AND photo_name = $3
+    `;
+    const deleteResult = await client.query(deleteQuery, [albumId, userId, photoName]);
+
+    // 2. Voltar status da foto para 'unsorted' na photo_metadata
+    const updateQuery = `
+      UPDATE photo_metadata 
+      SET status = 'unsorted', moved_to_library_at = NULL, updated_at = NOW()
+      WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status = 'album'
+    `;
+    const updateResult = await client.query(updateQuery, [userId, photoName]);
+
+    await client.query('COMMIT');
+    
+    console.log(`✅ Photo ${photoName} removed from album ${albumId} and status updated to unsorted`);
+    console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata`);
+    
+    return deleteResult.rowCount !== null && deleteResult.rowCount > 0;
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error removing photo from album:', error.message);
+    throw new Error(`Failed to remove photo from album: ${error.message}`);
+  } finally {
+    client.release();
+  }
 }
 
 async getAlbumWithCategories(albumId: number, userId: string) {
