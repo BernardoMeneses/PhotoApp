@@ -16,6 +16,7 @@ interface AuthResult {
   };
   token: string;
   idToken: string; // ✅ Adicionar idToken do Firebase
+  refreshToken?: string; // Retornar refreshToken para permitir refresh no mobile
 }
 
 export class AuthService {
@@ -46,6 +47,42 @@ export class AuthService {
   }
 
   /**
+   * Troca um Firebase refresh token por um novo idToken (e possivelmente novo refreshToken)
+   * Retorna também um token JWT interno para uso em outras partes do backend
+   */
+  static async refreshFirebaseToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string; token: string; userId?: string; expiresIn?: string }> {
+    try {
+      const apiKey = process.env.FIREBASE_API_KEY;
+      if (!apiKey) {
+        throw new Error("FIREBASE_API_KEY is not defined in environment variables");
+      }
+
+      const url = `https://securetoken.googleapis.com/v1/token?key=${apiKey}`;
+
+      const params = new URLSearchParams();
+      params.append('grant_type', 'refresh_token');
+      params.append('refresh_token', refreshToken);
+
+      const response = await axios.post(url, params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+
+      // Response fields: id_token, refresh_token, user_id, expires_in
+      const idToken = response.data.id_token as string;
+      const newRefreshToken = response.data.refresh_token as string;
+      const userId = response.data.user_id as string;
+      const expiresIn = response.data.expires_in as string;
+
+      const token = userId ? this.generateToken(userId) : this.generateToken('');
+
+      return { idToken, refreshToken: newRefreshToken, token, userId, expiresIn };
+    } catch (error: any) {
+      console.error('❌ Error refreshing Firebase token:', error.response?.data || error.message);
+      throw new Error('Failed to refresh token');
+    }
+  }
+
+  /**
    * Cria utilizador no Firebase via REST API
    */
   static async signup(email: string, password: string): Promise<AuthResult> {
@@ -63,13 +100,14 @@ export class AuthService {
         returnSecureToken: true
       });
 
-      const { localId, email: userEmail, idToken } = response.data;
+      const { localId, email: userEmail, idToken, refreshToken } = response.data;
       const token = this.generateToken(localId);
 
       return {
         user: { id: localId, email: userEmail },
         token,
-        idToken // ✅ Retorna o idToken nativo do Firebase
+        idToken, // ✅ Retorna o idToken nativo do Firebase
+        refreshToken
       };
     } catch (error: any) {
       // Tratar erros específicos do Firebase
@@ -114,13 +152,14 @@ export class AuthService {
         returnSecureToken: true
       });
 
-      const { localId, email: userEmail, idToken } = response.data;
+      const { localId, email: userEmail, idToken, refreshToken } = response.data;
       const token = this.generateToken(localId);
 
       return {
         user: { id: localId, email: userEmail },
         token,
-        idToken // ✅ Retorna o idToken nativo do Firebase
+        idToken, // ✅ Retorna o idToken nativo do Firebase
+        refreshToken
       };
     } catch (error: any) {
       // Tratar erros específicos do Firebase
@@ -184,7 +223,7 @@ export class AuthService {
       console.log('✅ Firebase response received');
       console.log('📦 Response data keys:', Object.keys(response.data));
 
-      const { localId, email, idToken } = response.data;
+  const { localId, email, idToken, refreshToken } = response.data;
       
       if (!email) {
         console.error('❌ No email in Firebase response');
@@ -200,7 +239,8 @@ export class AuthService {
       return {
         user: { id: localId, email },
         token,
-        idToken // Firebase idToken
+        idToken, // Firebase idToken
+        refreshToken
       };
     } catch (error: any) {
       console.error('❌ Google authentication error');

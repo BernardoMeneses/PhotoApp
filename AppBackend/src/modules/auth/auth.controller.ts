@@ -79,6 +79,33 @@ router.post("/google/callback", async (req, res) => {
 });
 
 /**
+ * Refresh token endpoint
+ * Recebe { refreshToken } e troca por um novo Firebase idToken (útil para clientes móveis)
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'refreshToken is required' });
+    }
+
+    const refreshed = await AuthService.refreshFirebaseToken(refreshToken);
+
+    return res.status(200).json({
+      idToken: refreshed.idToken,
+      refreshToken: refreshed.refreshToken,
+      token: refreshed.token,
+      userId: refreshed.userId,
+      expiresIn: refreshed.expiresIn
+    });
+  } catch (err: any) {
+    console.error('❌ Refresh token error:', err.message || err);
+    res.status(401).json({ error: err.message || 'Failed to refresh token' });
+  }
+});
+
+/**
  * Vincular conta Google a uma conta existente
  * Permite que um usuário que já tem email/senha também possa fazer login com Google
  */
