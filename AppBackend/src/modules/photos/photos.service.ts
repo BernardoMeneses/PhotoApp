@@ -255,6 +255,38 @@ export class PhotosService {
     }
   }
 
+  // ✅ NOVO: Move fotos de LIBRARY/ALBUM de volta para UNSORTED
+  async movePhotosToUnsorted(userId: string, photoIds: string[]) {
+    console.log(`🔄 Movendo ${photoIds.length} fotos de volta para UNSORTED para usuário ${userId}`);
+    
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const photoId of photoIds) {
+        // Atualizar status de qualquer foto (library ou album) para unsorted
+        await client.query(`
+          UPDATE photo_metadata 
+          SET status = 'unsorted', moved_to_library_at = NULL, updated_at = NOW()
+          WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status IN ('library', 'album')
+        `, [userId, photoId]);
+        
+        console.log(`🔄 Foto ${photoId} movida de volta para unsorted`);
+      }
+
+      await client.query('COMMIT');
+      console.log(`✅ ${photoIds.length} fotos movidas de volta para UNSORTED`);
+      
+      return { success: true, moved: photoIds.length };
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('❌ Erro ao mover fotos para UNSORTED:', error.message);
+      throw new Error(`Falha ao mover fotos para unsorted: ${error.message}`);
+    } finally {
+      client.release();
+    }
+  }
+
   // Deletar uma foto específica de um usuário - APENAS GOOGLE DRIVE
   async deleteUserPhoto(photoId: string, userId: string): Promise<boolean> {
     console.log(`🗑️ Deletando foto ${photoId} do Google Drive do usuário ${userId}`);

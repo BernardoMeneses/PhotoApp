@@ -130,6 +130,34 @@ router.post("/move-to-library", authMiddleware, async (req: AuthenticatedRequest
   }
 });
 
+// ✅ NOVO: Mover fotos de LIBRARY/ALBUM de volta para UNSORTED
+router.post("/move-to-unsorted", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const { photoIds } = req.body;
+    
+    if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+      return res.status(400).json({ error: "photoIds array is required and must not be empty" });
+    }
+
+    console.log(`🔄 Moving ${photoIds.length} photos back to unsorted for user: ${req.user.uid}`);
+
+    const result = await photosService.movePhotosToUnsorted(req.user.uid, photoIds);
+    
+    res.status(200).json({
+      message: `Successfully moved ${result.moved} photos back to unsorted`,
+      moved: result.moved,
+      photoIds: photoIds
+    });
+  } catch (error: any) {
+    console.error("Error moving photos to unsorted:", error.message);
+    res.status(500).json({ error: "Failed to move photos to unsorted: " + error.message });
+  }
+});
+
 // Listar fotos do usuário (TODAS - para compatibilidade)
 router.get("/", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
