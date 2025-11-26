@@ -21,9 +21,30 @@ export declare class PhotosService {
         createdTime: string;
         size: string;
     }[]>;
+    savePhotoMetadata(userId: string, photoId: string, photoName: string, photoUrl: string, status?: 'unsorted' | 'library' | 'album'): Promise<void>;
+    listUnsortedPhotos(userId: string): Promise<{
+        id: any;
+        name: any;
+        url: any;
+        thumbnailUrl: string;
+        fullUrl: string;
+        driveId: any;
+        source: string;
+        createdTime: any;
+        uploadedAt: any;
+        status: string;
+    }[]>;
+    listLibraryPhotos(userId: string): Promise<Record<string, Record<string, Record<string, any[]>>>>;
+    movePhotosToLibrary(userId: string, photoIds: string[]): Promise<{
+        success: boolean;
+        moved: number;
+    }>;
+    movePhotosToUnsorted(userId: string, photoIds: string[]): Promise<{
+        success: boolean;
+        moved: number;
+    }>;
     deleteUserPhoto(photoId: string, userId: string): Promise<boolean>;
     deletePhotoByUrl(photoUrl: string, userId: string): Promise<boolean>;
-    listLibraryPhotos(userId: string): Promise<Record<string, Record<string, Record<string, any[]>>>>;
     batchDeletePhotos(photoIdentifiers: string[], userId: string): Promise<{
         success: string[];
         failed: string[];

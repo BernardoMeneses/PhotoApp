@@ -48,6 +48,12 @@ export declare class AlbumsService {
             error: string;
         }>;
     }>;
+    getAlbumTotalSize(albumId: number, userId: string): Promise<{
+        totalSize: number;
+        photoCount: number;
+        formattedSize: string;
+    }>;
+    private formatBytes;
     close(): Promise<void>;
 }
 //# sourceMappingURL=albums.service.d.ts.map

@@ -4,6 +4,7 @@ exports.PhotosService = void 0;
 const uuid_1 = require("uuid");
 const google_drive_service_1 = require("../../services/google-drive.service");
 const google_drive_token_service_1 = require("../../services/google-drive-token.service");
+const database_1 = require("../../config/database");
 class PhotosService {
     async uploadPhoto(file) {
         throw new Error("Use uploadPhotosWithUser method instead");
@@ -32,6 +33,7 @@ class PhotosService {
                     driveId: driveFile.id,
                     source: 'google-drive'
                 });
+                await this.savePhotoMetadata(userId, driveFile.id, fileName, `https://lh3.googleusercontent.com/d/${driveFile.id}=w1000-h1000`, 'unsorted');
                 console.log(`✅ Foto ${fileName} uploaded para Google Drive`);
             }
             catch (error) {
@@ -76,6 +78,158 @@ class PhotosService {
             throw new Error(`Falha ao buscar fotos: ${error.message}`);
         }
     }
+    async savePhotoMetadata(userId, photoId, photoName, photoUrl, status = 'unsorted') {
+        const client = await database_1.pool.connect();
+        try {
+            await client.query(`
+        INSERT INTO photo_metadata (user_id, photo_id, photo_name, photo_url, status, created_time)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (user_id, photo_id) 
+        DO UPDATE SET 
+          photo_name = EXCLUDED.photo_name,
+          photo_url = EXCLUDED.photo_url,
+          updated_at = NOW()
+      `, [userId, photoId, photoName, photoUrl, status]);
+            console.log(`💾 Metadados salvos: ${photoName} (status: ${status})`);
+        }
+        catch (error) {
+            console.error('❌ Erro ao salvar metadados:', error.message);
+        }
+        finally {
+            client.release();
+        }
+    }
+    async listUnsortedPhotos(userId) {
+        console.log(`📥 Buscando fotos UNSORTED para usuário ${userId}`);
+        const client = await database_1.pool.connect();
+        try {
+            const result = await client.query(`
+        SELECT photo_id, photo_name, photo_url, created_time, created_at
+        FROM photo_metadata 
+        WHERE user_id = $1 AND status = 'unsorted'
+        ORDER BY created_at DESC
+      `, [userId]);
+            const unsortedPhotos = result.rows.map(row => ({
+                id: row.photo_id,
+                name: row.photo_name,
+                url: row.photo_url,
+                thumbnailUrl: `https://lh3.googleusercontent.com/d/${row.photo_id}=w300-h300`,
+                fullUrl: `https://drive.google.com/uc?id=${row.photo_id}&export=download`,
+                driveId: row.photo_id,
+                source: 'google-drive',
+                createdTime: row.created_time,
+                uploadedAt: row.created_at,
+                status: 'unsorted'
+            }));
+            console.log(`📥 Encontradas ${unsortedPhotos.length} fotos unsorted`);
+            return unsortedPhotos;
+        }
+        catch (error) {
+            console.error('❌ Erro ao buscar fotos unsorted:', error.message);
+            throw new Error(`Falha ao buscar fotos unsorted: ${error.message}`);
+        }
+        finally {
+            client.release();
+        }
+    }
+    async listLibraryPhotos(userId) {
+        console.log(`📚 Organizando biblioteca de fotos para usuário ${userId}`);
+        const client = await database_1.pool.connect();
+        try {
+            const result = await client.query(`
+        SELECT photo_id, photo_name, photo_url, created_time, moved_to_library_at
+        FROM photo_metadata 
+        WHERE user_id = $1 AND status = 'library'
+        ORDER BY created_time DESC
+      `, [userId]);
+            const libraryPhotos = result.rows.map(row => ({
+                id: row.photo_id,
+                name: row.photo_name,
+                url: row.photo_url,
+                thumbnailUrl: `https://lh3.googleusercontent.com/d/${row.photo_id}=w300-h300`,
+                fullUrl: `https://drive.google.com/uc?id=${row.photo_id}&export=download`,
+                driveId: row.photo_id,
+                source: 'google-drive',
+                createdTime: row.created_time,
+                movedToLibraryAt: row.moved_to_library_at,
+                status: 'library'
+            }));
+            const grouped = {};
+            for (const photo of libraryPhotos) {
+                const date = new Date(photo.createdTime || photo.movedToLibraryAt);
+                const year = date.getFullYear().toString();
+                const month = (date.getMonth() + 1).toString().padStart(2, "0");
+                const day = date.getDate().toString().padStart(2, "0");
+                if (!grouped[year])
+                    grouped[year] = {};
+                if (!grouped[year][month])
+                    grouped[year][month] = {};
+                if (!grouped[year][month][day])
+                    grouped[year][month][day] = [];
+                grouped[year][month][day].push(photo);
+            }
+            console.log(`📚 Biblioteca organizada: ${libraryPhotos.length} fotos em ${Object.keys(grouped).length} anos`);
+            return grouped;
+        }
+        catch (error) {
+            console.error('❌ Erro ao buscar biblioteca:', error.message);
+            throw new Error(`Falha ao buscar biblioteca: ${error.message}`);
+        }
+        finally {
+            client.release();
+        }
+    }
+    async movePhotosToLibrary(userId, photoIds) {
+        console.log(`📚 Movendo ${photoIds.length} fotos para Library`);
+        const client = await database_1.pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const photoId of photoIds) {
+                await client.query(`
+          UPDATE photo_metadata 
+          SET status = 'library', moved_to_library_at = NOW(), updated_at = NOW()
+          WHERE user_id = $1 AND photo_id = $2 AND status = 'unsorted'
+        `, [userId, photoId]);
+            }
+            await client.query('COMMIT');
+            console.log(`✅ ${photoIds.length} fotos movidas para Library`);
+            return { success: true, moved: photoIds.length };
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            console.error('❌ Erro ao mover fotos para Library:', error.message);
+            throw new Error(`Falha ao mover fotos: ${error.message}`);
+        }
+        finally {
+            client.release();
+        }
+    }
+    async movePhotosToUnsorted(userId, photoIds) {
+        console.log(`🔄 Movendo ${photoIds.length} fotos de volta para UNSORTED para usuário ${userId}`);
+        const client = await database_1.pool.connect();
+        try {
+            await client.query('BEGIN');
+            for (const photoId of photoIds) {
+                await client.query(`
+          UPDATE photo_metadata 
+          SET status = 'unsorted', moved_to_library_at = NULL, updated_at = NOW()
+          WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status IN ('library', 'album')
+        `, [userId, photoId]);
+                console.log(`🔄 Foto ${photoId} movida de volta para unsorted`);
+            }
+            await client.query('COMMIT');
+            console.log(`✅ ${photoIds.length} fotos movidas de volta para UNSORTED`);
+            return { success: true, moved: photoIds.length };
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            console.error('❌ Erro ao mover fotos para UNSORTED:', error.message);
+            throw new Error(`Falha ao mover fotos para unsorted: ${error.message}`);
+        }
+        finally {
+            client.release();
+        }
+    }
     async deleteUserPhoto(photoId, userId) {
         console.log(`🗑️ Deletando foto ${photoId} do Google Drive do usuário ${userId}`);
         const hasGoogleDriveTokens = await google_drive_token_service_1.GoogleDriveTokenService.hasTokens(userId);
@@ -89,6 +243,20 @@ class PhotosService {
             }
             const deleted = await google_drive_service_1.googleDriveService.deletePhoto(tokens, photoId);
             if (deleted) {
+                const client = await database_1.pool.connect();
+                try {
+                    await client.query(`
+            DELETE FROM photo_metadata 
+            WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2)
+          `, [userId, photoId]);
+                    console.log(`🗑️ Foto ${photoId} removida da base de dados`);
+                }
+                catch (dbError) {
+                    console.error('❌ Erro ao remover foto da base de dados:', dbError.message);
+                }
+                finally {
+                    client.release();
+                }
                 console.log(`✅ Foto ${photoId} deletada com sucesso do Google Drive`);
                 return true;
             }
@@ -115,25 +283,6 @@ class PhotosService {
             console.error(`❌ Erro ao deletar foto por URL: ${error.message}`);
             throw error;
         }
-    }
-    async listLibraryPhotos(userId) {
-        console.log(`📚 Organizando biblioteca de fotos do Google Drive para usuário ${userId}`);
-        const photos = await this.listUserPhotos(userId);
-        const grouped = {};
-        for (const photo of photos) {
-            const date = new Date(photo.createdTime || new Date());
-            const year = date.getFullYear().toString();
-            const month = (date.getMonth() + 1).toString().padStart(2, "0");
-            const day = date.getDate().toString().padStart(2, "0");
-            if (!grouped[year])
-                grouped[year] = {};
-            if (!grouped[year][month])
-                grouped[year][month] = {};
-            if (!grouped[year][month][day])
-                grouped[year][month][day] = [];
-            grouped[year][month][day].push(photo);
-        }
-        return grouped;
     }
     async batchDeletePhotos(photoIdentifiers, userId) {
         console.log(`🗑️ Deletando ${photoIdentifiers.length} fotos em lote do Google Drive`);
@@ -174,6 +323,28 @@ class PhotosService {
             console.log(`🎯 Encontrados ${photoIds.length} IDs válidos para deletar`);
             console.log(`❌ ${notFound.length} fotos não encontradas`);
             const result = await google_drive_service_1.googleDriveService.batchDeletePhotos(tokens, photoIds);
+            if (result.success.length > 0) {
+                const client = await database_1.pool.connect();
+                try {
+                    await client.query('BEGIN');
+                    for (const deletedPhotoId of result.success) {
+                        await client.query(`
+              DELETE FROM photo_metadata 
+              WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2)
+            `, [userId, deletedPhotoId]);
+                        console.log(`🗑️ Removida foto ${deletedPhotoId} da base de dados`);
+                    }
+                    await client.query('COMMIT');
+                    console.log(`✅ ${result.success.length} fotos removidas da base de dados`);
+                }
+                catch (dbError) {
+                    await client.query('ROLLBACK');
+                    console.error('❌ Erro ao remover fotos da base de dados:', dbError.message);
+                }
+                finally {
+                    client.release();
+                }
+            }
             result.failed.push(...notFound);
             console.log(`✅ ${result.success.length} fotos deletadas com sucesso`);
             console.log(`❌ ${result.failed.length} fotos falharam`);

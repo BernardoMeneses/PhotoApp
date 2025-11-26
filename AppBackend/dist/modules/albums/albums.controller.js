@@ -51,25 +51,11 @@ router.post("/", auth_middleware_1.authMiddleware, async (req, res) => {
         }
         console.log("📁 Creating album for user:", req.user.uid);
         console.log("📝 Album data:", { title, hexcolor, year, coverimage, categoryId });
-        let finalCoverImage = coverimage;
-        if (!finalCoverImage) {
-            try {
-                const userPhotos = await photosService.listUserPhotos(req.user.uid);
-                if (userPhotos.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * userPhotos.length);
-                    finalCoverImage = userPhotos[randomIndex].url;
-                    console.log("🎲 Using random user photo as cover:", finalCoverImage);
-                }
-            }
-            catch (photoError) {
-                console.log("⚠️ Could not get user photos for cover, using color only");
-            }
-        }
         const album = await albumsService.createAlbum(req.user.uid, req.user.email, {
             title,
             hexcolor,
             year,
-            coverimage: finalCoverImage,
+            coverimage: coverimage || null,
             categoryId: categoryId && categoryId !== "" ? categoryId : undefined
         });
         res.status(201).json({
@@ -213,9 +199,16 @@ router.get("/test/status", (req, res) => {
         availableEndpoints: [
             "POST /albums - Create album (requires auth)",
             "GET /albums - Get user albums (requires auth)",
+            "GET /albums/simple - Get user albums without categories (requires auth)",
             "GET /albums/:id - Get specific album (requires auth)",
             "PUT /albums/:id - Update album (requires auth)",
-            "DELETE /albums/:id - Delete album (requires auth)",
+            "POST /albums/:id/delete - Delete album (requires auth)",
+            "POST /albums/:id/photos - Add photo to album (requires auth)",
+            "POST /albums/:id/photos/batch - Batch add photos to album (requires auth)",
+            "GET /albums/:id/photos - Get album photos (requires auth)",
+            "POST /albums/:id/photos/:photoName/remove - Remove photo from album (requires auth)",
+            "GET /albums/:id/categories - Get album with categories (requires auth)",
+            "GET /albums/:id/size - Get album total size (requires auth)",
             "GET /albums/test/status - Test endpoint"
         ],
         authRequired: "Bearer <firebase_token>"
@@ -320,6 +313,27 @@ router.get("/:id/categories", auth_middleware_1.authMiddleware, async (req, res)
     }
     catch (error) {
         console.error("❌ Get album categories error:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+router.get("/:id/size", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user?.uid) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+        const albumId = parseInt(req.params.id);
+        if (isNaN(albumId)) {
+            return res.status(400).json({ error: "Invalid album ID" });
+        }
+        console.log(`📊 Getting total size for album ${albumId} of user ${req.user.uid}`);
+        const sizeInfo = await albumsService.getAlbumTotalSize(albumId, req.user.uid);
+        res.json({
+            message: "Album size calculated successfully",
+            data: sizeInfo
+        });
+    }
+    catch (error) {
+        console.error("❌ Get album size error:", error.message);
         res.status(500).json({ error: error.message });
     }
 });

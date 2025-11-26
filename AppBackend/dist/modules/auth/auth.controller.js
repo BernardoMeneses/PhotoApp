@@ -60,6 +60,26 @@ router.post("/google/callback", async (req, res) => {
         res.status(401).json({ error: err.message || "Google authentication failed" });
     }
 });
+router.post('/refresh', async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+            return res.status(400).json({ error: 'refreshToken is required' });
+        }
+        const refreshed = await auth_service_1.AuthService.refreshFirebaseToken(refreshToken);
+        return res.status(200).json({
+            idToken: refreshed.idToken,
+            refreshToken: refreshed.refreshToken,
+            token: refreshed.token,
+            userId: refreshed.userId,
+            expiresIn: refreshed.expiresIn
+        });
+    }
+    catch (err) {
+        console.error('❌ Refresh token error:', err.message || err);
+        res.status(401).json({ error: err.message || 'Failed to refresh token' });
+    }
+});
 router.post("/link-google", async (req, res) => {
     try {
         const { firebaseIdToken, googleIdToken } = req.body;

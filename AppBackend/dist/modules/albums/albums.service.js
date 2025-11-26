@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AlbumsService = void 0;
 const database_1 = require("../../config/database");
@@ -243,13 +276,34 @@ class AlbumsService {
         }
     }
     async addPhotoToAlbum(albumId, userId, photoName, photoUrl) {
-        const query = `
-    INSERT INTO albumphotos (album_id, user_id, photo_name, photo_url)
-    VALUES ($1, $2, $3, $4)
-    RETURNING *;
-  `;
-        const result = await database_1.pool.query(query, [albumId, userId, photoName, photoUrl]);
-        return result.rows[0];
+        const client = await database_1.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const insertQuery = `
+        INSERT INTO albumphotos (album_id, user_id, photo_name, photo_url)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *;
+      `;
+            const insertResult = await client.query(insertQuery, [albumId, userId, photoName, photoUrl]);
+            const updateQuery = `
+        UPDATE photo_metadata 
+        SET status = 'album', moved_to_library_at = NOW(), updated_at = NOW()
+        WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status IN ('unsorted', 'library')
+      `;
+            const updateResult = await client.query(updateQuery, [userId, photoName]);
+            await client.query('COMMIT');
+            console.log(`✅ Photo ${photoName} added to album ${albumId} and status updated to album`);
+            console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata (from unsorted/library to album)`);
+            return insertResult.rows[0];
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            console.error('❌ Error adding photo to album:', error.message);
+            throw new Error(`Failed to add photo to album: ${error.message}`);
+        }
+        finally {
+            client.release();
+        }
     }
     async getAlbumPhotos(albumId, userId) {
         const query = `
@@ -261,12 +315,33 @@ class AlbumsService {
         return result.rows;
     }
     async removePhotoFromAlbum(albumId, userId, photoName) {
-        const query = `
-    DELETE FROM albumphotos
-    WHERE album_id = $1 AND user_id = $2 AND photo_name = $3
-  `;
-        const result = await database_1.pool.query(query, [albumId, userId, photoName]);
-        return result.rowCount !== null && result.rowCount > 0;
+        const client = await database_1.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const deleteQuery = `
+      DELETE FROM albumphotos
+      WHERE album_id = $1 AND user_id = $2 AND photo_name = $3
+    `;
+            const deleteResult = await client.query(deleteQuery, [albumId, userId, photoName]);
+            const updateQuery = `
+      UPDATE photo_metadata 
+      SET status = 'library', updated_at = NOW()
+      WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2) AND status = 'album'
+    `;
+            const updateResult = await client.query(updateQuery, [userId, photoName]);
+            await client.query('COMMIT');
+            console.log(`✅ Photo ${photoName} removed from album ${albumId} and status updated to library`);
+            console.log(`📊 Updated ${updateResult.rowCount} rows in photo_metadata`);
+            return deleteResult.rowCount !== null && deleteResult.rowCount > 0;
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            console.error('❌ Error removing photo from album:', error.message);
+            throw new Error(`Failed to remove photo from album: ${error.message}`);
+        }
+        finally {
+            client.release();
+        }
     }
     async getAlbumWithCategories(albumId, userId) {
         const album = await this.getAlbumById(albumId, userId);
@@ -297,6 +372,54 @@ class AlbumsService {
             }
         }
         return results;
+    }
+    async getAlbumTotalSize(albumId, userId) {
+        try {
+            console.log(`📊 Calculating total size for album ${albumId} of user ${userId}`);
+            const album = await this.getAlbumById(albumId, userId);
+            if (!album) {
+                throw new Error('Album not found or access denied');
+            }
+            const albumPhotos = await this.getAlbumPhotos(albumId, userId);
+            if (albumPhotos.length === 0) {
+                return {
+                    totalSize: 0,
+                    photoCount: 0,
+                    formattedSize: '0 B'
+                };
+            }
+            const { PhotosService } = await Promise.resolve().then(() => __importStar(require('../photos/photos.service')));
+            const photosService = new PhotosService();
+            const userPhotos = await photosService.listUserPhotos(userId);
+            const photoSizeMap = new Map();
+            userPhotos.forEach(photo => {
+                photoSizeMap.set(photo.name, parseInt(photo.size) || 0);
+            });
+            let totalSize = 0;
+            albumPhotos.forEach(albumPhoto => {
+                const photoSize = photoSizeMap.get(albumPhoto.photo_name) || 0;
+                totalSize += photoSize;
+            });
+            const formattedSize = this.formatBytes(totalSize);
+            console.log(`✅ Album ${albumId} total size: ${formattedSize} (${albumPhotos.length} photos)`);
+            return {
+                totalSize,
+                photoCount: albumPhotos.length,
+                formattedSize
+            };
+        }
+        catch (error) {
+            console.error('❌ Error calculating album total size:', error.message);
+            throw new Error(`Failed to calculate album size: ${error.message}`);
+        }
+    }
+    formatBytes(bytes) {
+        if (bytes === 0)
+            return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
     async close() {
         await database_1.pool.end();

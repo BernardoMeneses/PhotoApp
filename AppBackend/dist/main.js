@@ -36,12 +36,14 @@ try {
     const profileRouter = require("./modules/profile/profile.controller").default;
     const albumsRouter = require("./modules/albums/albums.controller").default;
     const categoriesRouter = require("./modules/categories/categories.controller").default;
+    const { paymentsRouter } = require("./modules/payments");
     app.use("/", authRouter);
     app.use("/auth", authRouter);
     app.use("/photos", photosRouter);
     app.use("/profile", profileRouter);
     app.use("/albums", albumsRouter);
     app.use("/categories", categoriesRouter);
+    app.use("/payments", paymentsRouter);
 }
 catch (error) {
     console.error("❌ Error loading routes:", error);

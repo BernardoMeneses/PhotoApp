@@ -56,10 +56,31 @@ const createTables = async () => {
             )
         `);
         await client.query(`
+            CREATE TABLE IF NOT EXISTS photo_metadata (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL,
+                photo_id VARCHAR(255) NOT NULL, -- ID da foto no Google Drive
+                photo_name VARCHAR(500) NOT NULL,
+                photo_url TEXT NOT NULL,
+                status VARCHAR(20) DEFAULT 'unsorted', -- 'unsorted', 'library', ou 'album'
+                created_time TIMESTAMP,
+                moved_to_library_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, photo_id) -- Evitar duplicados
+            )
+        `);
+        await client.query(`
             CREATE INDEX IF NOT EXISTS idx_albumphotos_album_id ON albumphotos(album_id)
         `);
         await client.query(`
             CREATE INDEX IF NOT EXISTS idx_albumphotos_user_id ON albumphotos(user_id)
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_photo_metadata_user_status ON photo_metadata(user_id, status)
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_photo_metadata_photo_id ON photo_metadata(photo_id)
         `);
         console.log('✅ Tables created successfully');
     }

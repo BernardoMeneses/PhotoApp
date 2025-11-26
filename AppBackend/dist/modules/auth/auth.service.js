@@ -27,6 +27,31 @@ class AuthService {
             throw new Error("Invalid or expired token");
         }
     }
+    static async refreshFirebaseToken(refreshToken) {
+        try {
+            const apiKey = process.env.FIREBASE_API_KEY;
+            if (!apiKey) {
+                throw new Error("FIREBASE_API_KEY is not defined in environment variables");
+            }
+            const url = `https://securetoken.googleapis.com/v1/token?key=${apiKey}`;
+            const params = new URLSearchParams();
+            params.append('grant_type', 'refresh_token');
+            params.append('refresh_token', refreshToken);
+            const response = await axios_1.default.post(url, params.toString(), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            });
+            const idToken = response.data.id_token;
+            const newRefreshToken = response.data.refresh_token;
+            const userId = response.data.user_id;
+            const expiresIn = response.data.expires_in;
+            const token = userId ? this.generateToken(userId) : this.generateToken('');
+            return { idToken, refreshToken: newRefreshToken, token, userId, expiresIn };
+        }
+        catch (error) {
+            console.error('❌ Error refreshing Firebase token:', error.response?.data || error.message);
+            throw new Error('Failed to refresh token');
+        }
+    }
     static async signup(email, password) {
         try {
             const apiKey = process.env.FIREBASE_API_KEY;
@@ -39,12 +64,13 @@ class AuthService {
                 password,
                 returnSecureToken: true
             });
-            const { localId, email: userEmail, idToken } = response.data;
+            const { localId, email: userEmail, idToken, refreshToken } = response.data;
             const token = this.generateToken(localId);
             return {
                 user: { id: localId, email: userEmail },
                 token,
-                idToken
+                idToken,
+                refreshToken
             };
         }
         catch (error) {
@@ -79,12 +105,13 @@ class AuthService {
                 password,
                 returnSecureToken: true
             });
-            const { localId, email: userEmail, idToken } = response.data;
+            const { localId, email: userEmail, idToken, refreshToken } = response.data;
             const token = this.generateToken(localId);
             return {
                 user: { id: localId, email: userEmail },
                 token,
-                idToken
+                idToken,
+                refreshToken
             };
         }
         catch (error) {
@@ -130,7 +157,7 @@ class AuthService {
             const response = await axios_1.default.post(url, requestBody);
             console.log('✅ Firebase response received');
             console.log('📦 Response data keys:', Object.keys(response.data));
-            const { localId, email, idToken } = response.data;
+            const { localId, email, idToken, refreshToken } = response.data;
             if (!email) {
                 console.error('❌ No email in Firebase response');
                 throw new Error("Google account does not have an email address");
@@ -141,7 +168,8 @@ class AuthService {
             return {
                 user: { id: localId, email },
                 token,
-                idToken
+                idToken,
+                refreshToken
             };
         }
         catch (error) {

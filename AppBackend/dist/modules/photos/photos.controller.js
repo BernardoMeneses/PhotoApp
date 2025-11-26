@@ -48,6 +48,82 @@ router.post("/upload", auth_middleware_1.authMiddleware, upload.array('photos', 
         res.status(500).json({ error: "Failed to upload photos: " + error.message });
     }
 });
+router.get("/unsorted", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+        const unsortedPhotos = await photosService.listUnsortedPhotos(req.user.uid);
+        res.status(200).json({
+            message: `Found ${unsortedPhotos.length} unsorted photos`,
+            photos: unsortedPhotos
+        });
+    }
+    catch (error) {
+        console.error("Error listing unsorted photos:", error.message);
+        res.status(500).json({ error: "Failed to list unsorted photos: " + error.message });
+    }
+});
+router.get("/library", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+        const libraryPhotos = await photosService.listLibraryPhotos(req.user.uid);
+        res.status(200).json({
+            message: "Library photos organized by date",
+            photos: libraryPhotos
+        });
+    }
+    catch (error) {
+        console.error("Error listing library photos:", error.message);
+        res.status(500).json({ error: "Failed to list library photos: " + error.message });
+    }
+});
+router.post("/move-to-library", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+        const { photoIds } = req.body;
+        if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+            return res.status(400).json({ error: "photoIds array is required and must not be empty" });
+        }
+        console.log(`📚 Moving ${photoIds.length} photos to library for user: ${req.user.uid}`);
+        const result = await photosService.movePhotosToLibrary(req.user.uid, photoIds);
+        res.status(200).json({
+            message: `Successfully moved ${result.moved} photos to library`,
+            moved: result.moved,
+            photoIds: photoIds
+        });
+    }
+    catch (error) {
+        console.error("Error moving photos to library:", error.message);
+        res.status(500).json({ error: "Failed to move photos to library: " + error.message });
+    }
+});
+router.post("/move-to-unsorted", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+        const { photoIds } = req.body;
+        if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+            return res.status(400).json({ error: "photoIds array is required and must not be empty" });
+        }
+        console.log(`🔄 Moving ${photoIds.length} photos back to unsorted for user: ${req.user.uid}`);
+        const result = await photosService.movePhotosToUnsorted(req.user.uid, photoIds);
+        res.status(200).json({
+            message: `Successfully moved ${result.moved} photos back to unsorted`,
+            moved: result.moved,
+            photoIds: photoIds
+        });
+    }
+    catch (error) {
+        console.error("Error moving photos to unsorted:", error.message);
+        res.status(500).json({ error: "Failed to move photos to unsorted: " + error.message });
+    }
+});
 router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         if (!req.user) {

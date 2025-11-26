@@ -21,6 +21,8 @@ tags:
     description: Album creation and photo organization
   - name: Categories
     description: Category management for albums
+  - name: Payments
+    description: Premium subscription and payment processing
 paths:
   /ping:
     get:
@@ -855,6 +857,166 @@ paths:
       responses:
         '200':
           description: Deleted
+  /payments/create-checkout-session:
+    post:
+      tags:
+        - Payments
+      summary: Create Stripe checkout session for premium upgrade
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                successUrl:
+                  type: string
+                  description: URL to redirect after successful payment
+                  example: "http://localhost:3001/payment/success"
+                cancelUrl:
+                  type: string
+                  description: URL to redirect after cancelled payment
+                  example: "http://localhost:3001/payment/cancel"
+              required:
+                - successUrl
+                - cancelUrl
+      responses:
+        '200':
+          description: Checkout session created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                    description: Stripe checkout session ID
+                  url:
+                    type: string
+                    description: Stripe checkout URL
+        '400':
+          description: Bad request - missing URLs
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+  /payments/webhook:
+    post:
+      tags:
+        - Payments
+      summary: Stripe webhook endpoint
+      description: Handles Stripe webhook events for payment processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Stripe webhook payload
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Stripe webhook signature
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+        '400':
+          description: Invalid webhook signature or payload
+  /payments/premium-status:
+    get:
+      tags:
+        - Payments
+      summary: Check user premium status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Premium status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    description: User ID
+                  isPremium:
+                    type: boolean
+                    description: Whether user has premium access
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+  /payments/history:
+    get:
+      tags:
+        - Payments
+      summary: Get user payment history
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Payment history retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Payment ID
+                        user_id:
+                          type: string
+                          description: User ID
+                        payment_method:
+                          type: string
+                          enum: [stripe]
+                          description: Payment method used
+                        amount_cents:
+                          type: integer
+                          description: Amount paid in cents
+                        currency:
+                          type: string
+                          description: Currency code
+                        status:
+                          type: string
+                          enum: [pending, completed, failed, refunded]
+                          description: Payment status
+                        stripe_session_id:
+                          type: string
+                          description: Stripe checkout session ID
+                        stripe_payment_intent_id:
+                          type: string
+                          description: Stripe payment intent ID
+                        created_at:
+                          type: string
+                          format: date-time
+                          description: Payment creation timestamp
+                        updated_at:
+                          type: string
+                          format: date-time
+                          description: Payment last update timestamp
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
 components:
   securitySchemes:
     bearerAuth:
