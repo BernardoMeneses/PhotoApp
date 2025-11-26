@@ -16,6 +16,7 @@ router.post(
       }
 
       console.log(`💳 Creating checkout session for user: ${req.user.uid}`);
+      
 
       const { successUrl, cancelUrl } = req.body;
 
