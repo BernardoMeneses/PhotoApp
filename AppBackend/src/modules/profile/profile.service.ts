@@ -1,3 +1,5 @@
+import { pool } from "../../config/database";
+import { GoogleDriveService } from "../../services/google-drive.service";
 import axios from "axios";
 
 interface FirebaseUserData {
@@ -18,6 +20,34 @@ interface UpdateProfileData {
 }
 
 export class ProfileService {
+  /**
+   * Obter uso do Google Drive do usuário autenticado
+   */
+  static async getGoogleDriveUsage(userId: string): Promise<{ used: number; total: number }> {
+    if (!userId) throw new Error("User not authenticated");
+    // Buscar tokens do utilizador na base de dados
+    const result = await pool.query(
+      "SELECT google_drive_access_token, google_drive_refresh_token FROM users WHERE id = $1",
+      [userId]
+    );
+    const row = result.rows[0];
+    if (!row || !row.google_drive_access_token) {
+      throw new Error("Google Drive not connected");
+    }
+    const tokens = {
+      access_token: row.google_drive_access_token,
+      refresh_token: row.google_drive_refresh_token,
+    };
+    // Chamar Google API para obter uso
+    const googleDriveService = new GoogleDriveService();
+    const drive = (googleDriveService as any)["createDriveClient"](tokens);
+    const about = await drive.about.get({ fields: "storageQuota" });
+    const quota = about.data.storageQuota;
+    return {
+      used: Number(quota?.usage || 0),
+      total: Number(quota?.limit || 15 * 1024 * 1024 * 1024), // fallback 15GB
+    };
+  }
   /**
    * Buscar dados do perfil atual do Firebase
    */

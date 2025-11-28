@@ -43,7 +43,6 @@ class PaymentsService {
     }
     async createCheckoutSession(userId, successUrl, cancelUrl, subscriptionType) {
         try {
-            console.log(`🛒 Creating checkout session for user: ${userId}`);
             const isPremium = await this.checkPremiumStatus(userId);
             if (isPremium) {
                 throw new Error('User is already premium');
@@ -97,7 +96,6 @@ class PaymentsService {
                 stripe_session_id: session.id,
                 stripe_customer_id: customer.id
             });
-            console.log(`✅ Checkout session created: ${session.id}`);
             return session;
         }
         catch (error) {
@@ -112,7 +110,6 @@ class PaymentsService {
         }
         try {
             const event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
-            console.log(`🎣 Processing webhook event: ${event.type}`);
             switch (event.type) {
                 case 'checkout.session.completed':
                     await this.handleCheckoutSessionCompleted(event.data.object);
@@ -133,7 +130,6 @@ class PaymentsService {
                     await this.handleInvoicePaymentFailed(event.data.object);
                     break;
                 default:
-                    console.log(`🤷 Unhandled event type: ${event.type}`);
             }
             return event;
         }
@@ -148,9 +144,7 @@ class PaymentsService {
             if (!userId) {
                 throw new Error('No user ID found in checkout session');
             }
-            console.log(`💳 Checkout completed for user: ${userId}`);
             if (session.mode === 'subscription') {
-                console.log(`🔄 Subscription checkout completed, waiting for subscription.created webhook`);
                 await this.updatePaymentStatus(session.id, 'completed', undefined, session.subscription);
                 await this.activatePremium(userId);
             }
@@ -165,11 +159,9 @@ class PaymentsService {
         }
     }
     async handlePaymentIntentSucceeded(paymentIntent) {
-        console.log(`✅ Payment succeeded: ${paymentIntent.id}`);
     }
     async handlePaymentIntentFailed(paymentIntent) {
         try {
-            console.log(`❌ Payment failed: ${paymentIntent.id}`);
             const query = `
         UPDATE payments 
         SET status = 'failed', updated_at = NOW()
@@ -203,7 +195,6 @@ class PaymentsService {
             if (result.rowCount === 0) {
                 throw new Error(`User ${userId} not found`);
             }
-            console.log(`🌟 Premium activated for user: ${userId}`);
         }
         catch (error) {
             console.error('❌ Error activating premium:', error);
@@ -277,7 +268,6 @@ class PaymentsService {
                 console.error('❌ No user_id in subscription metadata');
                 return;
             }
-            console.log(`🔄 Subscription created for user: ${userId}`);
             await this.createSubscriptionRecord(subscription, userId);
             if (subscription.status === 'active') {
                 await this.activatePremium(userId);
@@ -294,7 +284,6 @@ class PaymentsService {
                 console.error('❌ No user_id in subscription metadata');
                 return;
             }
-            console.log(`🔄 Subscription updated for user: ${userId}, status: ${subscription.status}`);
             await this.updateSubscriptionRecord(subscription);
             if (subscription.status === 'active') {
                 await this.activatePremium(userId);
@@ -314,7 +303,6 @@ class PaymentsService {
                 console.error('❌ No user_id in subscription metadata');
                 return;
             }
-            console.log(`❌ Subscription deleted for user: ${userId}`);
             await this.updateSubscriptionStatus(subscription.id, 'canceled');
             await this.deactivatePremium(userId);
         }
@@ -324,7 +312,6 @@ class PaymentsService {
     }
     async handleInvoicePaymentSucceeded(invoice) {
         try {
-            console.log(`✅ Invoice payment succeeded: ${invoice.id}`);
             const invoiceAny = invoice;
             if (invoiceAny.subscription) {
                 const subscription = await this.stripe.subscriptions.retrieve(invoiceAny.subscription);
@@ -349,7 +336,6 @@ class PaymentsService {
     }
     async handleInvoicePaymentFailed(invoice) {
         try {
-            console.log(`❌ Invoice payment failed: ${invoice.id}`);
             const invoiceAny = invoice;
             if (invoiceAny.subscription) {
                 const subscription = await this.stripe.subscriptions.retrieve(invoiceAny.subscription);
@@ -451,7 +437,6 @@ class PaymentsService {
             if (result.rowCount === 0) {
                 throw new Error(`User ${userId} not found`);
             }
-            console.log(`🚫 Premium deactivated for user: ${userId}`);
         }
         catch (error) {
             console.error('❌ Error deactivating premium:', error);
@@ -469,7 +454,6 @@ class PaymentsService {
             await this.stripe.subscriptions.update(subscriptionId, {
                 cancel_at_period_end: true
             });
-            console.log(`📋 Subscription marked for cancellation: ${subscriptionId}`);
         }
         catch (error) {
             console.error('❌ Error canceling subscription:', error);

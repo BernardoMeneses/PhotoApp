@@ -4,8 +4,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProfileService = void 0;
+const database_1 = require("../../config/database");
+const google_drive_service_1 = require("../../services/google-drive.service");
 const axios_1 = __importDefault(require("axios"));
 class ProfileService {
+    static async getGoogleDriveUsage(userId) {
+        if (!userId)
+            throw new Error("User not authenticated");
+        const result = await database_1.pool.query("SELECT google_drive_access_token, google_drive_refresh_token FROM users WHERE id = $1", [userId]);
+        const row = result.rows[0];
+        if (!row || !row.google_drive_access_token) {
+            throw new Error("Google Drive not connected");
+        }
+        const tokens = {
+            access_token: row.google_drive_access_token,
+            refresh_token: row.google_drive_refresh_token,
+        };
+        const googleDriveService = new google_drive_service_1.GoogleDriveService();
+        const drive = googleDriveService["createDriveClient"](tokens);
+        const about = await drive.about.get({ fields: "storageQuota" });
+        const quota = about.data.storageQuota;
+        return {
+            used: Number(quota?.usage || 0),
+            total: Number(quota?.limit || 15 * 1024 * 1024 * 1024),
+        };
+    }
     static async getCurrentProfile(idToken) {
         try {
             const apiKey = process.env.FIREBASE_API_KEY;

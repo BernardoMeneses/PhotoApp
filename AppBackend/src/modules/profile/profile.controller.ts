@@ -1,3 +1,4 @@
+
 import { Router, Response } from "express";
 import { ProfileService } from "./profile.service";
 import { authMiddleware, AuthenticatedRequest } from "../../middleware/auth.middleware";
@@ -23,6 +24,27 @@ router.use((req, res, next) => {
     }
   }
   next();
+});
+
+
+/**
+ * GET /profile/drive-usage - Obter uso do Google Drive do usuário autenticado
+ * Requer autenticação: Bearer token
+ */
+router.get("/drive-usage", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+    const usage = await ProfileService.getGoogleDriveUsage(userId);
+    res.json(usage);
+  } catch (error: any) {
+    if (error.message === "Google Drive not connected") {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message || "Failed to get Google Drive usage" });
+  }
 });
 
 /**

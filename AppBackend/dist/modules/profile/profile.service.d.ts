@@ -14,6 +14,10 @@ interface UpdateProfileData {
     displayName?: string;
 }
 export declare class ProfileService {
+    static getGoogleDriveUsage(userId: string): Promise<{
+        used: number;
+        total: number;
+    }>;
     static getCurrentProfile(idToken: string): Promise<FirebaseUserData>;
     static updateProfile(idToken: string, updateData: UpdateProfileData): Promise<FirebaseUserData>;
     static updateEmail(idToken: string, newEmail: string): Promise<FirebaseUserData>;

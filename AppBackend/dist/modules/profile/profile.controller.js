@@ -25,6 +25,22 @@ router.use((req, res, next) => {
     }
     next();
 });
+router.get("/drive-usage", auth_middleware_1.authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user?.uid;
+        if (!userId) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+        const usage = await profile_service_1.ProfileService.getGoogleDriveUsage(userId);
+        res.json(usage);
+    }
+    catch (error) {
+        if (error.message === "Google Drive not connected") {
+            return res.status(400).json({ error: error.message });
+        }
+        res.status(500).json({ error: error.message || "Failed to get Google Drive usage" });
+    }
+});
 router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
     try {
         const authHeader = req.headers.authorization;

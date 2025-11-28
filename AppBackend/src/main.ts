@@ -54,7 +54,7 @@ try {
   const albumsRouter = require("./modules/albums/albums.controller").default;
   const categoriesRouter = require("./modules/categories/categories.controller").default;
   const { paymentsRouter } = require("./modules/payments");
-  const driveRouter = require("./modules/profile/drive.controller").default;
+  
 
   app.use("/", authRouter);
   app.use("/auth", authRouter);
@@ -62,7 +62,6 @@ try {
   app.use("/profile", profileRouter);
   app.use("/albums", albumsRouter);
   app.use("/categories", categoriesRouter);
-  app.use("/profile/drive", driveRouter);
   // Mount all /payments routes except /payments/webhook (which is mounted above)
   app.use("/payments", paymentsRouter);
 } catch (error) {
