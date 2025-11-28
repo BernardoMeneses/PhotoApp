@@ -32,6 +32,7 @@ router.use((req, res, next) => {
  * Requer autenticação: Bearer token
  */
 router.get("/drive-usage", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  console.log("🔔 [API] GET /profile/drive-usage called", req.headers.authorization);
   try {
     const userId = req.user?.uid;
     if (!userId) {
