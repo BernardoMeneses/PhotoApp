@@ -422,7 +422,7 @@ export class PaymentsService {
       }
 
 
-      // Atualizar registro de subscrição
+      
       await this.updateSubscriptionRecord(subscription);
       
       // Ativar ou desativar premium baseado no status
