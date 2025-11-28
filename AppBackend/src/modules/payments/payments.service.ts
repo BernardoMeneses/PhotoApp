@@ -88,10 +88,10 @@ export class PaymentsService {
   async createCheckoutSession(
     userId: string, 
     successUrl: string, 
-    cancelUrl: string
+    cancelUrl: string,
+    subscriptionType: 'monthly' | 'yearly'
   ): Promise<Stripe.Checkout.Session> {
     try {
-      console.log(`🛒 Creating checkout session for user: ${userId}`);
 
       // Verificar se usuário já é premium
       const isPremium = await this.checkPremiumStatus(userId);
@@ -102,6 +102,13 @@ export class PaymentsService {
       // Criar ou obter customer Stripe
       const customer = await this.getOrCreateStripeCustomer(userId);
 
+      // Definir preço e intervalo
+      const priceCents = subscriptionType === 'yearly' ? this.YEARLY_PRICE_CENTS : this.MONTHLY_PRICE_CENTS;
+      const interval = subscriptionType === 'yearly' ? 'year' : 'month';
+      const description = subscriptionType === 'yearly'
+        ? 'Unlimited photo storage and premium features - Yearly subscription'
+        : 'Unlimited photo storage and premium features - Monthly subscription';
+
       // Criar sessão Stripe para subscrição
       const session = await this.stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -110,11 +117,11 @@ export class PaymentsService {
             currency: this.CURRENCY,
             product_data: {
               name: 'PhotoApp Premium',
-              description: 'Unlimited photo storage and premium features - Monthly subscription'
+              description
             },
-            unit_amount: this.MONTHLY_PRICE_CENTS,
+            unit_amount: priceCents,
             recurring: {
-              interval: 'month'
+              interval
             }
           },
           quantity: 1,
@@ -126,11 +133,13 @@ export class PaymentsService {
         client_reference_id: userId,
         metadata: {
           user_id: userId,
-          product_type: 'premium_subscription'
+          product_type: 'premium_subscription',
+          subscription_type: subscriptionType
         },
         subscription_data: {
           metadata: {
-            user_id: userId
+            user_id: userId,
+            subscription_type: subscriptionType
           }
         }
       });
@@ -139,15 +148,14 @@ export class PaymentsService {
       await this.createPaymentRecord({
         user_id: userId,
         payment_method: 'stripe',
-        amount_cents: this.MONTHLY_PRICE_CENTS,
+        amount_cents: priceCents,
         currency: this.CURRENCY,
         status: 'pending',
-        subscription_type: 'monthly',
+        subscription_type: subscriptionType,
         stripe_session_id: session.id,
         stripe_customer_id: customer.id
       });
 
-      console.log(`✅ Checkout session created: ${session.id}`);
       return session;
     } catch (error) {
       console.error('❌ Error creating checkout session:', error);
@@ -171,7 +179,6 @@ export class PaymentsService {
         webhookSecret
       );
 
-      console.log(`🎣 Processing webhook event: ${event.type}`);
 
       switch (event.type) {
         case 'checkout.session.completed':
@@ -199,7 +206,6 @@ export class PaymentsService {
           break;
           
         default:
-          console.log(`🤷 Unhandled event type: ${event.type}`);
       }
 
       return event;
@@ -219,14 +225,13 @@ export class PaymentsService {
         throw new Error('No user ID found in checkout session');
       }
 
-      console.log(`💳 Checkout completed for user: ${userId}`);
 
       if (session.mode === 'subscription') {
         // Para subscrições, o webhook de subscription.created cuidará da ativação
-        console.log(`🔄 Subscription checkout completed, waiting for subscription.created webhook`);
         
         // Atualizar status do pagamento inicial
         await this.updatePaymentStatus(session.id, 'completed', undefined, session.subscription as string);
+        await this.activatePremium(userId);
       } else {
         // Para pagamentos únicos (se ainda houver)
         await this.updatePaymentStatus(session.id, 'completed', session.payment_intent as string);
@@ -243,7 +248,6 @@ export class PaymentsService {
    * Processar pagamento bem-sucedido
    */
   private async handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent): Promise<void> {
-    console.log(`✅ Payment succeeded: ${paymentIntent.id}`);
     // Lógica adicional se necessário
   }
 
@@ -252,7 +256,6 @@ export class PaymentsService {
    */
   private async handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent): Promise<void> {
     try {
-      console.log(`❌ Payment failed: ${paymentIntent.id}`);
       
       // Atualizar status do pagamento para falhado
       const query = `
@@ -299,7 +302,6 @@ export class PaymentsService {
         throw new Error(`User ${userId} not found`);
       }
       
-      console.log(`🌟 Premium activated for user: ${userId}`);
     } catch (error) {
       console.error('❌ Error activating premium:', error);
       throw error;
@@ -395,7 +397,6 @@ export class PaymentsService {
         return;
       }
 
-      console.log(`🔄 Subscription created for user: ${userId}`);
 
       // Criar registro de subscrição
       await this.createSubscriptionRecord(subscription, userId);
@@ -420,7 +421,6 @@ export class PaymentsService {
         return;
       }
 
-      console.log(`🔄 Subscription updated for user: ${userId}, status: ${subscription.status}`);
 
       // Atualizar registro de subscrição
       await this.updateSubscriptionRecord(subscription);
@@ -447,7 +447,6 @@ export class PaymentsService {
         return;
       }
 
-      console.log(`❌ Subscription deleted for user: ${userId}`);
 
       // Atualizar status da subscrição
       await this.updateSubscriptionStatus(subscription.id, 'canceled');
@@ -464,7 +463,6 @@ export class PaymentsService {
    */
   private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     try {
-      console.log(`✅ Invoice payment succeeded: ${invoice.id}`);
       
       // Para invoices de subscrição, buscar pela subscription na metadata ou customer
       const invoiceAny = invoice as any;
@@ -495,7 +493,6 @@ export class PaymentsService {
    */
   private async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     try {
-      console.log(`❌ Invoice payment failed: ${invoice.id}`);
       
       const invoiceAny = invoice as any;
       if (invoiceAny.subscription) {
@@ -528,6 +525,20 @@ export class PaymentsService {
    */
   private async createSubscriptionRecord(subscription: Stripe.Subscription, userId: string): Promise<void> {
     try {
+      // Determinar tipo de subscrição
+      const subscriptionType = subscription.metadata?.subscription_type || 'monthly';
+      // Data de início: agora
+      const now = new Date();
+      // Data de fim: +1 mês ou +1 ano
+      let periodEnd: Date;
+      if (subscriptionType === 'yearly') {
+        periodEnd = new Date(now);
+        periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      } else {
+        periodEnd = new Date(now);
+        periodEnd.setMonth(periodEnd.getMonth() + 1);
+      }
+
       const query = `
         INSERT INTO subscriptions (
           user_id, stripe_customer_id, stripe_subscription_id, status,
@@ -542,14 +553,14 @@ export class PaymentsService {
           cancel_at_period_end = $7,
           updated_at = NOW()
       `;
-      
+
       await this.pool.query(query, [
         userId,
         subscription.customer,
         subscription.id,
         subscription.status,
-        new Date(((subscription as any).current_period_start || 0) * 1000),
-        new Date(((subscription as any).current_period_end || 0) * 1000),
+        now,
+        periodEnd,
         (subscription as any).cancel_at_period_end || false
       ]);
     } catch (error) {
@@ -608,7 +619,6 @@ export class PaymentsService {
         throw new Error(`User ${userId} not found`);
       }
       
-      console.log(`🚫 Premium deactivated for user: ${userId}`);
     } catch (error) {
       console.error('❌ Error deactivating premium:', error);
       throw error;
@@ -634,7 +644,6 @@ export class PaymentsService {
         cancel_at_period_end: true
       });
       
-      console.log(`📋 Subscription marked for cancellation: ${subscriptionId}`);
     } catch (error) {
       console.error('❌ Error canceling subscription:', error);
       throw error;

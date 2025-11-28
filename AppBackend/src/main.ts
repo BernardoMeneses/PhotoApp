@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+
 import express from "express";
 import cors from "cors";
 import { testConnection } from "./config/database";
@@ -12,6 +13,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+
+// Register Stripe webhook route BEFORE express.json()
+try {
+  const { stripeWebhookHandler } = require("./modules/payments/payments.controller");
+  app.post("/payments/webhook", express.raw({ type: 'application/json' }), stripeWebhookHandler);
+} catch (error) {
+  console.error("❌ Error loading payments webhook handler:", error);
+}
+
+// Now apply express.json() for all other routes
 app.use(express.json());
 
 // Endpoint de teste básico
@@ -50,8 +61,8 @@ try {
   app.use("/profile", profileRouter);
   app.use("/albums", albumsRouter);
   app.use("/categories", categoriesRouter);
+  // Mount all /payments routes except /payments/webhook (which is mounted above)
   app.use("/payments", paymentsRouter);
-  
 } catch (error) {
   console.error("❌ Error loading routes:", error);
 }

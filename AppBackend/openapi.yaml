@@ -879,9 +879,15 @@ paths:
                   type: string
                   description: URL to redirect after cancelled payment
                   example: "http://localhost:3001/payment/cancel"
+                subscriptionType:
+                  type: string
+                  description: Tipo de subscrição (mensal ou anual)
+                  enum: [monthly, yearly]
+                  example: monthly
               required:
                 - successUrl
                 - cancelUrl
+                - subscriptionType
       responses:
         '200':
           description: Checkout session created successfully

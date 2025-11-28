@@ -14,6 +14,13 @@ const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
 app.use((0, cors_1.default)());
+try {
+    const { stripeWebhookHandler } = require("./modules/payments/payments.controller");
+    app.post("/payments/webhook", express_1.default.raw({ type: 'application/json' }), stripeWebhookHandler);
+}
+catch (error) {
+    console.error("❌ Error loading payments webhook handler:", error);
+}
 app.use(express_1.default.json());
 app.get("/ping", (req, res) => {
     res.json({ message: "Pong from backend 🚀" });

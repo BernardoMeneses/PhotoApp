@@ -16,20 +16,25 @@ router.post(
       }
 
       console.log(`💳 Creating checkout session for user: ${req.user.uid}`);
-      
 
-      const { successUrl, cancelUrl } = req.body;
+      const { successUrl, cancelUrl, subscriptionType } = req.body;
 
       if (!successUrl || !cancelUrl) {
         return res.status(400).json({ 
           error: "Success URL and Cancel URL are required" 
         });
       }
+      if (!subscriptionType || !["monthly", "yearly"].includes(subscriptionType)) {
+        return res.status(400).json({ 
+          error: "subscriptionType must be 'monthly' ou 'yearly'" 
+        });
+      }
 
       const session = await paymentsService.createCheckoutSession(
         req.user.uid,
         successUrl,
-        cancelUrl
+        cancelUrl,
+        subscriptionType
       );
 
       res.json({ 
@@ -46,36 +51,26 @@ router.post(
   }
 );
 
-// Webhook do Stripe para processar eventos
-router.post(
-  "/webhook",
-  express.raw({ type: 'application/json' }),
-  async (req: Request, res: Response) => {
-    try {
-      const sig = req.headers['stripe-signature'] as string;
-      
-      if (!sig) {
-        return res.status(400).json({ error: "Missing stripe signature" });
-      }
-
-      console.log("🎣 Received Stripe webhook");
-
-      // Para webhooks, req.body pode ser Buffer ou string
-      const payload = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body, 'utf8');
-      const event = await paymentsService.handleWebhook(payload, sig);
-      
-      console.log(`✅ Processed webhook event: ${event.type}`);
-      
-      res.json({ received: true });
-    } catch (error) {
-      console.error("❌ Error processing webhook:", error);
-      res.status(400).json({ 
-        error: "Webhook processing failed",
-        details: error instanceof Error ? error.message : "Unknown error"
-      });
+// Webhook do Stripe para processar eventos (exported handler for direct mounting)
+export const stripeWebhookHandler = async (req: Request, res: Response) => {
+  try {
+    const sig = req.headers['stripe-signature'] as string;
+    if (!sig) {
+      return res.status(400).json({ error: "Missing stripe signature" });
     }
+    console.log("🎣 Received Stripe webhook");
+    // Para webhooks, req.body já é Buffer devido ao express.raw
+    const event = await paymentsService.handleWebhook(req.body, sig);
+    console.log(`✅ Processed webhook event: ${event.type}`);
+    res.json({ received: true });
+  } catch (error) {
+    console.error("❌ Error processing webhook:", error);
+    res.status(400).json({ 
+      error: "Webhook processing failed",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
   }
-);
+};
 
 // Verificar status premium do usuário
 router.get(
