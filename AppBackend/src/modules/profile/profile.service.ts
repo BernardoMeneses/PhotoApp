@@ -37,6 +37,7 @@ export class ProfileService {
     const tokens = {
       access_token: row.google_drive_access_token,
       refresh_token: row.google_drive_refresh_token,
+      
     };
     // Chamar Google API para obter uso
     const googleDriveService = new GoogleDriveService();
