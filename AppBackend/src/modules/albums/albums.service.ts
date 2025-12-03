@@ -522,8 +522,16 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     const photoSizeByName = new Map();
     const photoSizeById = new Map();
     
+    // Criar array de todos os IDs para debug
+    const allDriveIds: string[] = [];
+    
     userPhotos.forEach((photo, index) => {
       const size = parseInt(photo.size) || 0;
+      const photoId = photo.id || photo.driveId;
+      
+      if (photoId) {
+        allDriveIds.push(photoId);
+      }
       
       // Debug: mostrar os primeiros 3 para ver a estrutura
       if (index < 3) {
@@ -538,10 +546,12 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       // Map por nome do ficheiro
       photoSizeByName.set(photo.name, size);
       // Map por ID do Drive
-      if (photo.id || photo.driveId) {
-        photoSizeById.set(photo.id || photo.driveId, size);
+      if (photoId) {
+        photoSizeById.set(photoId, size);
       }
     });
+    
+    console.log(`📋 Total unique Drive IDs in map: ${photoSizeById.size}`);
 
     console.log(`📦 Album has ${albumPhotos.length} photos assigned`);
     
@@ -570,7 +580,13 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       if (photoSize > 0) {
         console.log(`  ✓ ${albumPhoto.photo_name}: ${photoSize} bytes`);
       } else {
-        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found (tried name and ID)`);
+        console.log(`  ⚠️ ${albumPhoto.photo_name}: NOT FOUND in Drive`);
+        console.log(`     Checking if ID exists in Drive list: ${allDriveIds.includes(albumPhoto.photo_name)}`);
+        // Mostrar IDs similares (primeiros 5 caracteres)
+        const similarIds = allDriveIds.filter(id => id.startsWith(albumPhoto.photo_name.substring(0, 5)));
+        if (similarIds.length > 0) {
+          console.log(`     Similar IDs found: ${similarIds.slice(0, 3).join(', ')}`);
+        }
       }
       totalSize += photoSize;
     });

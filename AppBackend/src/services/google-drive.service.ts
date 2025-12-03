@@ -175,24 +175,41 @@ export class GoogleDriveService {
         folderId = await this.ensureAppFolder(tokens);
       }
 
-      const response = await drive.files.list({
-        q: `'${folderId}' in parents and trashed = false and mimeType contains 'image/'`,
-        fields: 'files(id, name, webViewLink, webContentLink, createdTime, size)',
-        orderBy: 'createdTime desc'
-      });
+      const allFiles: any[] = [];
+      let pageToken: string | undefined = undefined;
+      let pageCount = 0;
 
-      console.log(`📋 Encontradas ${response.data.files?.length || 0} fotos no Google Drive`);
+      // Buscar TODAS as páginas de resultados
+      do {
+        pageCount++;
+        const response = await drive.files.list({
+          q: `'${folderId}' in parents and trashed = false and mimeType contains 'image/'`,
+          fields: 'nextPageToken, files(id, name, webViewLink, webContentLink, createdTime, size)',
+          orderBy: 'createdTime desc',
+          pageSize: 1000, // Máximo permitido pela API
+          pageToken: pageToken
+        });
 
-      const files = response.data.files || [];
-      
-      // Garantir que todos os arquivos sejam públicos
-      for (const file of files) {
+        const files = response.data.files || [];
+        allFiles.push(...files);
+        
+        pageToken = response.data.nextPageToken || undefined;
+        
+        console.log(`📄 Page ${pageCount}: Found ${files.length} photos (total so far: ${allFiles.length})`);
+        
+      } while (pageToken);
+
+      console.log(`📋 Total: ${allFiles.length} fotos no Google Drive (${pageCount} páginas)`);
+
+      // Garantir que todos os arquivos sejam públicos (em lotes para não demorar muito)
+      console.log(`🔓 Making files public...`);
+      for (const file of allFiles) {
         if (file.id) {
           await this.ensureFileIsPublic(tokens, file.id);
         }
       }
 
-      return files.map(file => ({
+      return allFiles.map(file => ({
         id: file.id!,
         name: file.name!,
         // 👇 usa URL do Google User Content que funciona melhor para imagens públicas
