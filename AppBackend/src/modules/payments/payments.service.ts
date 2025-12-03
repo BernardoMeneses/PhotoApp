@@ -34,8 +34,8 @@ export interface SubscriptionRecord {
 export class PaymentsService {
   private stripe: Stripe;
   private pool: Pool;
-  private readonly MONTHLY_PRICE_CENTS = 999; // €9.99/mês
-  private readonly YEARLY_PRICE_CENTS = 9999; // €99.99/ano (2 meses grátis)
+  private readonly MONTHLY_PRICE_CENTS = 399; // €3.99/mês
+  private readonly YEARLY_PRICE_CENTS = 3999; // €39.99/ano (2 meses grátis)
   private readonly CURRENCY = 'eur';
 
   constructor() {
