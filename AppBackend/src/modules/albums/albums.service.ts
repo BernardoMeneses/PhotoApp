@@ -522,8 +522,19 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     const photoSizeByName = new Map();
     const photoSizeById = new Map();
     
-    userPhotos.forEach(photo => {
+    userPhotos.forEach((photo, index) => {
       const size = parseInt(photo.size) || 0;
+      
+      // Debug: mostrar os primeiros 3 para ver a estrutura
+      if (index < 3) {
+        console.log(`  Sample photo ${index + 1}:`, {
+          id: photo.id,
+          driveId: photo.driveId,
+          name: photo.name,
+          size: size
+        });
+      }
+      
       // Map por nome do ficheiro
       photoSizeByName.set(photo.name, size);
       // Map por ID do Drive
@@ -533,6 +544,14 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     });
 
     console.log(`📦 Album has ${albumPhotos.length} photos assigned`);
+    
+    // Debug: mostrar as primeiras 3 fotos do álbum
+    albumPhotos.slice(0, 3).forEach((albumPhoto, index) => {
+      console.log(`  Sample album photo ${index + 1}:`, {
+        photo_name: albumPhoto.photo_name,
+        photo_url: albumPhoto.photo_url
+      });
+    });
     
     // Calcular tamanho total
     let totalSize = 0;
