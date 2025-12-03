@@ -514,15 +514,9 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     const photosService = new PhotosService();
     
     // Obter todas as fotos do usuário com informações de tamanho
-    let userPhotos: any[] = [];
-    try {
-      userPhotos = await photosService.listUserPhotos(userId);
-      console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
-    } catch (error: any) {
-      console.error('⚠️ Error fetching user photos from Drive:', error.message);
-      console.log('📊 Continuing with size calculation (orphaned photos will be ignored)');
-      userPhotos = [];
-    }
+    const userPhotos = await photosService.listUserPhotos(userId);
+    
+    console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
     
     // Criar maps para lookup rápido por nome E por ID da foto
     const photoSizeByName = new Map();
@@ -549,7 +543,7 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       }
     });
 
-    console.log(`📋 Album has ${albumPhotos.length} photos assigned`);
+    console.log(` Album has ${albumPhotos.length} photos assigned`);
     
     // Debug: mostrar as primeiras 3 fotos do álbum
     albumPhotos.slice(0, 3).forEach((albumPhoto, index) => {
@@ -561,7 +555,6 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     
     // Calcular tamanho total
     let totalSize = 0;
-    let orphanedPhotosCount = 0;
     albumPhotos.forEach(albumPhoto => {
       let photoSize = 0;
       let foundBy = '';
@@ -595,32 +588,28 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       if (!photoSize) {
         photoSize = 0;
       }
+      
       if (photoSize > 0) {
         console.log(`  ✓ ${albumPhoto.photo_name}: ${photoSize} bytes (found by ${foundBy})`);
-        totalSize += photoSize;
       } else {
-        orphanedPhotosCount++;
-        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found - photo may have been deleted from Drive (ignoring)`);
+        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found (URL: ${albumPhoto.photo_url})`);
       }
+      totalSize += photoSize;
     });
     
     console.log(`💾 Total size calculated: ${totalSize} bytes`);
-    if (orphanedPhotosCount > 0) {
-      console.log(`⚠️ Ignored ${orphanedPhotosCount} orphaned photo(s) that no longer exist in Drive`);
-    }
 
     // Formatar o tamanho para legibilidade
     const formattedSize = this.formatBytes(totalSize);
 
-    const validPhotosCount = albumPhotos.length - orphanedPhotosCount;
-    console.log(`✅ Album ${albumId} total size: ${formattedSize} (${validPhotosCount} valid photos, ${orphanedPhotosCount} orphaned)`);
+    console.log(`✅ Album ${albumId} total size: ${formattedSize} (${albumPhotos.length} photos)`);
 
     return {
       totalSize,
-      photoCount: validPhotosCount,
+      photoCount: albumPhotos.length,
       formattedSize
     };
-    
+
   } catch (error: any) {
     console.error('❌ Error calculating album total size:', error.message);
     throw new Error(`Failed to calculate album size: ${error.message}`);
