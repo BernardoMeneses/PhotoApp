@@ -56,20 +56,35 @@ export class PaymentsService {
   private async getOrCreateStripeCustomer(userId: string): Promise<Stripe.Customer> {
     try {
       // Verificar se já existe customer para este usuário
-      const query = 'SELECT stripe_customer_id FROM users WHERE id = $1';
+      const query = 'SELECT stripe_customer_id, email FROM users WHERE id = $1';
       const result = await this.pool.query(query, [userId]);
       
       if (result.rows[0]?.stripe_customer_id) {
-        // Buscar customer existente
-        return await this.stripe.customers.retrieve(result.rows[0].stripe_customer_id) as Stripe.Customer;
+        try {
+          // Tentar buscar customer existente
+          const customer = await this.stripe.customers.retrieve(result.rows[0].stripe_customer_id) as Stripe.Customer;
+          
+          // Verificar se customer foi deletado
+          if (customer.deleted) {
+            throw new Error('Customer was deleted');
+          }
+          
+          return customer;
+        } catch (error: any) {
+          // Se customer não existe no Stripe (erro 404 ou deleted), criar novo
+          console.warn(`⚠️ Customer ${result.rows[0].stripe_customer_id} not found in Stripe, creating new one`);
+        }
       }
       
       // Criar novo customer
       const customer = await this.stripe.customers.create({
+        email: result.rows[0]?.email,
         metadata: {
           user_id: userId
         }
       });
+      
+      console.log(`✅ Created new Stripe customer: ${customer.id} for user: ${userId}`);
       
       // Salvar customer_id no usuário
       const updateQuery = 'UPDATE users SET stripe_customer_id = $1 WHERE id = $2';
