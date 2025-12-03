@@ -518,13 +518,17 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     
     console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
     
-    // Criar um map para lookup rápido por nome da foto
-    const photoSizeMap = new Map();
+    // Criar maps para lookup rápido por nome E por ID da foto
+    const photoSizeByName = new Map();
+    const photoSizeById = new Map();
+    
     userPhotos.forEach(photo => {
       const size = parseInt(photo.size) || 0;
-      photoSizeMap.set(photo.name, size);
-      if (size > 0) {
-        console.log(`  Photo: ${photo.name} -> ${size} bytes`);
+      // Map por nome do ficheiro
+      photoSizeByName.set(photo.name, size);
+      // Map por ID do Drive
+      if (photo.id || photo.driveId) {
+        photoSizeById.set(photo.id || photo.driveId, size);
       }
     });
 
@@ -533,11 +537,21 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     // Calcular tamanho total
     let totalSize = 0;
     albumPhotos.forEach(albumPhoto => {
-      const photoSize = photoSizeMap.get(albumPhoto.photo_name) || 0;
+      // Tentar encontrar por nome primeiro, depois por ID
+      let photoSize = photoSizeByName.get(albumPhoto.photo_name);
+      
+      if (!photoSize) {
+        photoSize = photoSizeById.get(albumPhoto.photo_name);
+      }
+      
+      if (!photoSize) {
+        photoSize = 0;
+      }
+      
       if (photoSize > 0) {
         console.log(`  ✓ ${albumPhoto.photo_name}: ${photoSize} bytes`);
       } else {
-        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found or 0`);
+        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found (tried name and ID)`);
       }
       totalSize += photoSize;
     });
