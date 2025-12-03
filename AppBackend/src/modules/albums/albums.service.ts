@@ -514,9 +514,15 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     const photosService = new PhotosService();
     
     // Obter todas as fotos do usuário com informações de tamanho
-    const userPhotos = await photosService.listUserPhotos(userId);
-    
-    console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
+    let userPhotos;
+    try {
+      userPhotos = await photosService.listUserPhotos(userId);
+      console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
+    } catch (error: any) {
+      console.error('⚠️ Error fetching user photos from Drive:', error.message);
+      console.log('📊 Continuing with size calculation (orphaned photos will be ignored)');
+      userPhotos = [];
+    }
     
     // Criar maps para lookup rápido por nome E por ID da foto
     const photoSizeByName = new Map();
@@ -537,19 +543,20 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       
       // Map por nome do ficheiro
       photoSizeByName.set(photo.name, size);
-      // Map por ID do Drive
-      if (photo.id || photo.driveId) {
-        photoSizeById.set(photo.id || photo.driveId, size);
-      }
-    });
-
-    console.log(` Album has ${albumPhotos.length} photos assigned`);
+    console.log(`📋 Album has ${albumPhotos.length} photos assigned`);
     
     // Debug: mostrar as primeiras 3 fotos do álbum
     albumPhotos.slice(0, 3).forEach((albumPhoto, index) => {
       console.log(`  Sample album photo ${index + 1}:`, {
         photo_name: albumPhoto.photo_name,
         photo_url: albumPhoto.photo_url
+      });
+    });
+    
+    // Calcular tamanho total
+    let totalSize = 0;
+    let orphanedPhotosCount = 0;
+    albumPhotos.forEach(albumPhoto => {
       });
     });
     
@@ -588,26 +595,31 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       if (!photoSize) {
         photoSize = 0;
       }
-      
       if (photoSize > 0) {
         console.log(`  ✓ ${albumPhoto.photo_name}: ${photoSize} bytes (found by ${foundBy})`);
+        totalSize += photoSize;
       } else {
-        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found (URL: ${albumPhoto.photo_url})`);
+        orphanedPhotosCount++;
+        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found - photo may have been deleted from Drive (ignoring)`);
       }
-      totalSize += photoSize;
     });
     
     console.log(`💾 Total size calculated: ${totalSize} bytes`);
+    if (orphanedPhotosCount > 0) {
+      console.log(`⚠️ Ignored ${orphanedPhotosCount} orphaned photo(s) that no longer exist in Drive`);
+    }
 
     // Formatar o tamanho para legibilidade
     const formattedSize = this.formatBytes(totalSize);
 
-    console.log(`✅ Album ${albumId} total size: ${formattedSize} (${albumPhotos.length} photos)`);
+    const validPhotosCount = albumPhotos.length - orphanedPhotosCount;
+    console.log(`✅ Album ${albumId} total size: ${formattedSize} (${validPhotosCount} valid photos, ${orphanedPhotosCount} orphaned)`);
 
     return {
       totalSize,
-      photoCount: albumPhotos.length,
+      photoCount: validPhotosCount,
       formattedSize
+    };formattedSize
     };
 
   } catch (error: any) {
