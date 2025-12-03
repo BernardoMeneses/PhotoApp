@@ -514,7 +514,7 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     const photosService = new PhotosService();
     
     // Obter todas as fotos do usuário com informações de tamanho
-    let userPhotos;
+    let userPhotos: any[] = [];
     try {
       userPhotos = await photosService.listUserPhotos(userId);
       console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
@@ -543,6 +543,12 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       
       // Map por nome do ficheiro
       photoSizeByName.set(photo.name, size);
+      // Map por ID do Drive
+      if (photo.id || photo.driveId) {
+        photoSizeById.set(photo.id || photo.driveId, size);
+      }
+    });
+
     console.log(`📋 Album has ${albumPhotos.length} photos assigned`);
     
     // Debug: mostrar as primeiras 3 fotos do álbum
@@ -556,12 +562,6 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
     // Calcular tamanho total
     let totalSize = 0;
     let orphanedPhotosCount = 0;
-    albumPhotos.forEach(albumPhoto => {
-      });
-    });
-    
-    // Calcular tamanho total
-    let totalSize = 0;
     albumPhotos.forEach(albumPhoto => {
       let photoSize = 0;
       let foundBy = '';
@@ -619,9 +619,8 @@ async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: n
       totalSize,
       photoCount: validPhotosCount,
       formattedSize
-    };formattedSize
     };
-
+    
   } catch (error: any) {
     console.error('❌ Error calculating album total size:', error.message);
     throw new Error(`Failed to calculate album size: ${error.message}`);
