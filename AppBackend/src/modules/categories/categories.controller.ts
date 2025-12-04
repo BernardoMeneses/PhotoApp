@@ -145,4 +145,31 @@ router.post("/:id/delete", authMiddleware, async (req: AuthenticatedRequest, res
   }
 });
 
+// Get total size of a category (sum of all albums)
+router.get("/:id/size", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    if (isNaN(categoryId)) {
+      return res.status(400).json({ error: "Invalid category ID" });
+    }
+
+    if (!req.user?.uid) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const { AlbumsService } = await import('../albums/albums.service');
+    const albumsService = new AlbumsService();
+    
+    const sizeInfo = await albumsService.getCategoryTotalSize(categoryId, req.user.uid);
+    
+    res.json({ 
+      message: "Category size calculated successfully",
+      data: sizeInfo
+    });
+  } catch (error: any) {
+    console.error("Get category size error:", error);
+    res.status(500).json({ error: error.message || "Failed to calculate category size" });
+  }
+});
+
 export default router;

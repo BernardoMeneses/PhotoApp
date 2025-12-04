@@ -25,6 +25,9 @@ export interface CreateAlbumData {
 export class AlbumsService {
   private usersService: UsersService;
   private categoriesService: CategoriesService;
+  private photoSizeCache: Map<string, { photoSizeByName: Map<string, number>, photoSizeById: Map<string, number> }> | null = null;
+  private cacheTimestamp: number | null = null;
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
   constructor() {
     // Usar a pool de conexões configurada em database.ts
@@ -486,137 +489,6 @@ async batchAddPhotosToAlbum(
 }
 
 /**
- * Calcular o tamanho total de um álbum
- */
-async getAlbumTotalSize(albumId: number, userId: string): Promise<{ totalSize: number, photoCount: number, formattedSize: string }> {
-  try {
-    console.log(`📊 Calculating total size for album ${albumId} of user ${userId}`);
-    
-    // Verificar se o álbum existe e pertence ao usuário
-    const album = await this.getAlbumById(albumId, userId);
-    if (!album) {
-      throw new Error('Album not found or access denied');
-    }
-
-    // Obter as fotos do álbum
-    const albumPhotos = await this.getAlbumPhotos(albumId, userId);
-    
-    if (albumPhotos.length === 0) {
-      return {
-        totalSize: 0,
-        photoCount: 0,
-        formattedSize: '0 B'
-      };
-    }
-
-    // Importar PhotosService para obter informações das fotos com tamanhos
-    const { PhotosService } = await import('../photos/photos.service');
-    const photosService = new PhotosService();
-    
-    // Obter todas as fotos do usuário com informações de tamanho
-    const userPhotos = await photosService.listUserPhotos(userId);
-    
-    console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
-    
-    // Criar maps para lookup rápido por nome E por ID da foto
-    const photoSizeByName = new Map();
-    const photoSizeById = new Map();
-    
-    userPhotos.forEach((photo, index) => {
-      const size = parseInt(photo.size) || 0;
-      
-      // Debug: mostrar os primeiros 3 para ver a estrutura
-      if (index < 3) {
-        console.log(`  Sample photo ${index + 1}:`, {
-          id: photo.id,
-          driveId: photo.driveId,
-          name: photo.name,
-          size: size
-        });
-      }
-      
-      // Map por nome do ficheiro
-      photoSizeByName.set(photo.name, size);
-      // Map por ID do Drive
-      if (photo.id || photo.driveId) {
-        photoSizeById.set(photo.id || photo.driveId, size);
-      }
-    });
-
-    console.log(` Album has ${albumPhotos.length} photos assigned`);
-    
-    // Debug: mostrar as primeiras 3 fotos do álbum
-    albumPhotos.slice(0, 3).forEach((albumPhoto, index) => {
-      console.log(`  Sample album photo ${index + 1}:`, {
-        photo_name: albumPhoto.photo_name,
-        photo_url: albumPhoto.photo_url
-      });
-    });
-    
-    // Calcular tamanho total
-    let totalSize = 0;
-    albumPhotos.forEach(albumPhoto => {
-      let photoSize = 0;
-      let foundBy = '';
-      
-      // Método 1: Tentar encontrar por photo_name diretamente
-      photoSize = photoSizeByName.get(albumPhoto.photo_name);
-      if (photoSize) {
-        foundBy = 'name';
-      }
-      
-      // Método 2: Tentar encontrar por photo_name como ID
-      if (!photoSize) {
-        photoSize = photoSizeById.get(albumPhoto.photo_name);
-        if (photoSize) {
-          foundBy = 'ID from photo_name';
-        }
-      }
-      
-      // Método 3: Extrair ID da URL (formato: https://lh3.googleusercontent.com/d/ID=w1000-h1000)
-      if (!photoSize && albumPhoto.photo_url) {
-        const urlMatch = albumPhoto.photo_url.match(/\/d\/([^=?]+)/);
-        if (urlMatch && urlMatch[1]) {
-          const idFromUrl = urlMatch[1];
-          photoSize = photoSizeById.get(idFromUrl);
-          if (photoSize) {
-            foundBy = `ID from URL: ${idFromUrl}`;
-          }
-        }
-      }
-      
-      if (!photoSize) {
-        photoSize = 0;
-      }
-      
-      if (photoSize > 0) {
-        console.log(`  ✓ ${albumPhoto.photo_name}: ${photoSize} bytes (found by ${foundBy})`);
-      } else {
-        console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found (URL: ${albumPhoto.photo_url})`);
-      }
-      totalSize += photoSize;
-    });
-    
-    console.log(`💾 Total size calculated: ${totalSize} bytes`);
-
-    // Formatar o tamanho para legibilidade
-    const formattedSize = this.formatBytes(totalSize);
-
-    console.log(`✅ Album ${albumId} total size: ${formattedSize} (${albumPhotos.length} photos)`);
-
-    return {
-      totalSize,
-      photoCount: albumPhotos.length,
-      formattedSize
-    };
-
-  } catch (error: any) {
-    console.error('❌ Error calculating album total size:', error.message);
-    throw new Error(`Failed to calculate album size: ${error.message}`);
-  }
-}
-
-/**
  * Formatar bytes em formato legível
  */
 private formatBytes(bytes: number): string {
@@ -627,6 +499,216 @@ private formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Obter ou atualizar cache de tamanhos de fotos
+ * Cache é válido por 5 minutos para evitar múltiplas chamadas ao Google Drive
+ */
+private async getPhotoSizeCache(userId: string, forceRefresh = false): Promise<{ photoSizeByName: Map<string, number>, photoSizeById: Map<string, number> }> {
+  const now = Date.now();
+  
+  // Verificar se cache é válido
+  if (!forceRefresh && this.photoSizeCache && this.cacheTimestamp && (now - this.cacheTimestamp) < this.CACHE_TTL) {
+    console.log('✅ Using cached photo sizes');
+    return this.photoSizeCache.get(userId) || { photoSizeByName: new Map(), photoSizeById: new Map() };
+  }
+  
+  console.log('🔄 Refreshing photo size cache from Google Drive');
+  
+  // Buscar fotos do Google Drive
+  const { PhotosService } = await import('../photos/photos.service');
+  const photosService = new PhotosService();
+  const userPhotos = await photosService.listUserPhotos(userId);
+  
+  console.log(`📸 Loaded ${userPhotos.length} photos from Google Drive`);
+  
+  // Criar maps para lookup rápido
+  const photoSizeByName = new Map<string, number>();
+  const photoSizeById = new Map<string, number>();
+  
+  userPhotos.forEach((photo) => {
+    const size = parseInt(photo.size) || 0;
+    
+    // Map por nome do ficheiro
+    photoSizeByName.set(photo.name, size);
+    
+    // Map por ID do Drive
+    if (photo.id || photo.driveId) {
+      photoSizeById.set(photo.id || photo.driveId, size);
+    }
+  });
+  
+  // Atualizar cache
+  if (!this.photoSizeCache) {
+    this.photoSizeCache = new Map();
+  }
+  this.photoSizeCache.set(userId, { photoSizeByName, photoSizeById });
+  this.cacheTimestamp = now;
+  
+  return { photoSizeByName, photoSizeById };
+}
+
+/**
+ * Obter tamanho de uma foto específica usando o cache
+ */
+private async getPhotoSize(
+  userId: string,
+  photoName: string,
+  photoUrl: string,
+  cache: { photoSizeByName: Map<string, number>, photoSizeById: Map<string, number> }
+): Promise<number> {
+  let photoSize = 0;
+  
+  // Método 1: Buscar por nome
+  photoSize = cache.photoSizeByName.get(photoName) || 0;
+  if (photoSize > 0) return photoSize;
+  
+  // Método 2: Buscar por photo_name como ID
+  photoSize = cache.photoSizeById.get(photoName) || 0;
+  if (photoSize > 0) return photoSize;
+  
+  // Método 3: Extrair ID da URL
+  if (photoUrl) {
+    const urlMatch = photoUrl.match(/\/d\/([^=?]+)/);
+    if (urlMatch && urlMatch[1]) {
+      photoSize = cache.photoSizeById.get(urlMatch[1]) || 0;
+      if (photoSize > 0) return photoSize;
+    }
+  }
+  
+  return 0;
+}
+
+/**
+ * Calcular tamanho total de um álbum (OTIMIZADO)
+ */
+async getAlbumTotalSize(
+  albumId: number,
+  userId: string,
+  photoSizeCache?: { photoSizeByName: Map<string, number>, photoSizeById: Map<string, number> }
+): Promise<{ totalSize: number, photoCount: number, formattedSize: string }> {
+  try {
+    // Verificar se o álbum existe
+    const album = await this.getAlbumById(albumId, userId);
+    if (!album) {
+      throw new Error('Album not found or access denied');
+    }
+
+    // Obter fotos do álbum
+    const albumPhotos = await this.getAlbumPhotos(albumId, userId);
+    
+    if (albumPhotos.length === 0) {
+      return { totalSize: 0, photoCount: 0, formattedSize: '0 B' };
+    }
+
+    // Usar cache fornecido ou obter novo
+    const cache = photoSizeCache || await this.getPhotoSizeCache(userId);
+    
+    // Calcular tamanho total
+    let totalSize = 0;
+    for (const albumPhoto of albumPhotos) {
+      const photoSize = await this.getPhotoSize(userId, albumPhoto.photo_name, albumPhoto.photo_url, cache);
+      totalSize += photoSize;
+    }
+
+    return {
+      totalSize,
+      photoCount: albumPhotos.length,
+      formattedSize: this.formatBytes(totalSize)
+    };
+
+  } catch (error: any) {
+    console.error('❌ Error calculating album total size:', error.message);
+    throw new Error(`Failed to calculate album size: ${error.message}`);
+  }
+}
+
+/**
+ * Calcular tamanho total de uma categoria (soma de todos os álbuns)
+ */
+async getCategoryTotalSize(categoryId: number, userId: string): Promise<{
+  totalSize: number,
+  albumCount: number,
+  photoCount: number,
+  formattedSize: string,
+  albums: Array<{ id: number, title: string, size: number, photoCount: number, formattedSize: string }>
+}> {
+  try {
+    console.log(`📊 Calculating total size for category ${categoryId} of user ${userId}`);
+    
+    // Buscar todos os álbuns da categoria
+    const query = `
+      SELECT a.id, a.title
+      FROM Albums a
+      INNER JOIN albums_categories ac ON a.id = ac.album_id
+      WHERE ac.category_id = $1 AND a.user_id = $2
+      ORDER BY a.created_at DESC
+    `;
+    
+    const result = await pool.query(query, [categoryId, userId]);
+    const albums = result.rows;
+    
+    if (albums.length === 0) {
+      return {
+        totalSize: 0,
+        albumCount: 0,
+        photoCount: 0,
+        formattedSize: '0 B',
+        albums: []
+      };
+    }
+
+    console.log(`📂 Category has ${albums.length} albums`);
+    
+    // Obter cache uma única vez para todos os álbuns
+    const photoSizeCache = await this.getPhotoSizeCache(userId);
+    
+    // Calcular tamanho de cada álbum usando o mesmo cache
+    let totalSize = 0;
+    let totalPhotoCount = 0;
+    const albumDetails = [];
+    
+    for (const album of albums) {
+      const albumSize = await this.getAlbumTotalSize(album.id, userId, photoSizeCache);
+      
+      totalSize += albumSize.totalSize;
+      totalPhotoCount += albumSize.photoCount;
+      
+      albumDetails.push({
+        id: album.id,
+        title: album.title,
+        size: albumSize.totalSize,
+        photoCount: albumSize.photoCount,
+        formattedSize: albumSize.formattedSize
+      });
+      
+      console.log(`  📁 ${album.title}: ${albumSize.formattedSize} (${albumSize.photoCount} photos)`);
+    }
+
+    console.log(`✅ Category ${categoryId} total size: ${this.formatBytes(totalSize)} (${albums.length} albums, ${totalPhotoCount} photos)`);
+
+    return {
+      totalSize,
+      albumCount: albums.length,
+      photoCount: totalPhotoCount,
+      formattedSize: this.formatBytes(totalSize),
+      albums: albumDetails
+    };
+
+  } catch (error: any) {
+    console.error('❌ Error calculating category total size:', error.message);
+    throw new Error(`Failed to calculate category size: ${error.message}`);
+  }
+}
+
+/**
+ * Limpar cache de tamanhos de fotos
+ */
+clearPhotoSizeCache(): void {
+  this.photoSizeCache = null;
+  this.cacheTimestamp = null;
+  console.log('🗑️ Photo size cache cleared');
 }
 
   /**
