@@ -219,7 +219,7 @@ class CategoriesService {
         FROM Categories c
         LEFT JOIN albums_categories ac ON c.id = ac.category_id
         LEFT JOIN Albums a ON ac.album_id = a.id
-        LEFT JOIN album_photos ap ON a.id = ap.album_id
+        LEFT JOIN albumphotos ap ON a.id = ap.album_id
         LEFT JOIN Photos p ON ap.photo_name = p.name AND a.user_id = p.user_id
         WHERE c.user_id = $1
         GROUP BY c.id, c.user_id, c.name, c.description, c.color, c.created_at
