@@ -50,31 +50,18 @@ router.post("/", authMiddleware, async (req: AuthenticatedRequest, res: Response
   }
 });
 
-// Get user's categories with size calculation
+// Get user's categories
 router.get("/", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user?.uid) {
       return res.status(401).json({ error: "User not authenticated" });
     }
 
-    // Check if size calculation is requested
-    const includeSize = req.query.includeSize === 'true';
-
-    if (includeSize) {
-      // Use the efficient method that calculates sizes in a single query
-      const categoriesWithSize = await categoriesService.getUserCategoriesWithSize(req.user.uid);
-      res.json({ 
-        message: "Categories with size retrieved successfully",
-        data: categoriesWithSize 
-      });
-    } else {
-      // Use the simple method without size calculation
-      const categories = await categoriesService.getUserCategories(req.user.uid);
-      res.json({ 
-        message: "Categories retrieved successfully",
-        data: categories 
-      });
-    }
+    const categories = await categoriesService.getUserCategories(req.user.uid);
+    res.json({ 
+      message: "Categories retrieved successfully",
+      data: categories 
+    });
   } catch (error: any) {
     console.error("Get categories error:", error);
     res.status(500).json({ error: error.message || "Failed to get categories" });
