@@ -627,17 +627,8 @@ async getAlbumTotalSize(
 /**
  * Calcular tamanho total de uma categoria (soma de todos os álbuns)
  */
-async getCategoryTotalSize(categoryId: number, userId: string): Promise<{
-  totalSize: number,
-  albumCount: number,
-  photoCount: number,
-  formattedSize: string,
-  albums: Array<{ id: number, title: string, size: number, photoCount: number, formattedSize: string }>
-}> {
+async getCategoryTotalSize(categoryId: number, userId: string) {
   try {
-    console.log(`📊 Calculating total size for category ${categoryId} of user ${userId}`);
-    
-    // Buscar todos os álbuns da categoria
     const query = `
       SELECT a.id, a.title
       FROM Albums a
@@ -645,62 +636,46 @@ async getCategoryTotalSize(categoryId: number, userId: string): Promise<{
       WHERE ac.category_id = $1 AND a.user_id = $2
       ORDER BY a.created_at DESC
     `;
-    
     const result = await pool.query(query, [categoryId, userId]);
     const albums = result.rows;
-    
     if (albums.length === 0) {
-      return {
-        totalSize: 0,
-        albumCount: 0,
-        photoCount: 0,
-        formattedSize: '0 B',
-        albums: []
-      };
+      return { totalSize: 0, albumCount: 0, photoCount: 0, formattedSize: '0 B', albums: [] };
     }
 
-    console.log(`📂 Category has ${albums.length} albums`);
-    
-    // Obter cache uma única vez para todos os álbuns
     const photoSizeCache = await this.getPhotoSizeCache(userId);
-    
-    // Calcular tamanho de cada álbum usando o mesmo cache
+    // 🚀 Calcular todos os tamanhos em paralelo
+    const albumSizes = await Promise.all(
+      albums.map(a => this.getAlbumTotalSize(a.id, userId, photoSizeCache))
+    );
+
     let totalSize = 0;
-    let totalPhotoCount = 0;
-    const albumDetails = [];
-    
-    for (const album of albums) {
-      const albumSize = await this.getAlbumTotalSize(album.id, userId, photoSizeCache);
-      
-      totalSize += albumSize.totalSize;
-      totalPhotoCount += albumSize.photoCount;
-      
-      albumDetails.push({
+    let totalPhotos = 0;
+    const details = albums.map((album, i) => {
+      const s = albumSizes[i];
+      totalSize += s.totalSize;
+      totalPhotos += s.photoCount;
+      return {
         id: album.id,
         title: album.title,
-        size: albumSize.totalSize,
-        photoCount: albumSize.photoCount,
-        formattedSize: albumSize.formattedSize
-      });
-      
-      console.log(`  📁 ${album.title}: ${albumSize.formattedSize} (${albumSize.photoCount} photos)`);
-    }
-
-    console.log(`✅ Category ${categoryId} total size: ${this.formatBytes(totalSize)} (${albums.length} albums, ${totalPhotoCount} photos)`);
+        size: s.totalSize,
+        photoCount: s.photoCount,
+        formattedSize: s.formattedSize,
+      };
+    });
 
     return {
       totalSize,
       albumCount: albums.length,
-      photoCount: totalPhotoCount,
+      photoCount: totalPhotos,
       formattedSize: this.formatBytes(totalSize),
-      albums: albumDetails
+      albums: details,
     };
-
   } catch (error: any) {
     console.error('❌ Error calculating category total size:', error.message);
     throw new Error(`Failed to calculate category size: ${error.message}`);
   }
 }
+
 
 /**
  * Limpar cache de tamanhos de fotos
