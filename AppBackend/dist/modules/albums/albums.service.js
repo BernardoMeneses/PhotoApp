@@ -391,15 +391,67 @@ class AlbumsService {
             const { PhotosService } = await Promise.resolve().then(() => __importStar(require('../photos/photos.service')));
             const photosService = new PhotosService();
             const userPhotos = await photosService.listUserPhotos(userId);
-            const photoSizeMap = new Map();
-            userPhotos.forEach(photo => {
-                photoSizeMap.set(photo.name, parseInt(photo.size) || 0);
+            console.log(`📸 Found ${userPhotos.length} photos in user's Google Drive`);
+            const photoSizeByName = new Map();
+            const photoSizeById = new Map();
+            userPhotos.forEach((photo, index) => {
+                const size = parseInt(photo.size) || 0;
+                if (index < 3) {
+                    console.log(`  Sample photo ${index + 1}:`, {
+                        id: photo.id,
+                        driveId: photo.driveId,
+                        name: photo.name,
+                        size: size
+                    });
+                }
+                photoSizeByName.set(photo.name, size);
+                if (photo.id || photo.driveId) {
+                    photoSizeById.set(photo.id || photo.driveId, size);
+                }
+            });
+            console.log(` Album has ${albumPhotos.length} photos assigned`);
+            albumPhotos.slice(0, 3).forEach((albumPhoto, index) => {
+                console.log(`  Sample album photo ${index + 1}:`, {
+                    photo_name: albumPhoto.photo_name,
+                    photo_url: albumPhoto.photo_url
+                });
             });
             let totalSize = 0;
             albumPhotos.forEach(albumPhoto => {
-                const photoSize = photoSizeMap.get(albumPhoto.photo_name) || 0;
+                let photoSize = 0;
+                let foundBy = '';
+                photoSize = photoSizeByName.get(albumPhoto.photo_name);
+                if (photoSize) {
+                    foundBy = 'name';
+                }
+                if (!photoSize) {
+                    photoSize = photoSizeById.get(albumPhoto.photo_name);
+                    if (photoSize) {
+                        foundBy = 'ID from photo_name';
+                    }
+                }
+                if (!photoSize && albumPhoto.photo_url) {
+                    const urlMatch = albumPhoto.photo_url.match(/\/d\/([^=?]+)/);
+                    if (urlMatch && urlMatch[1]) {
+                        const idFromUrl = urlMatch[1];
+                        photoSize = photoSizeById.get(idFromUrl);
+                        if (photoSize) {
+                            foundBy = `ID from URL: ${idFromUrl}`;
+                        }
+                    }
+                }
+                if (!photoSize) {
+                    photoSize = 0;
+                }
+                if (photoSize > 0) {
+                    console.log(`  ✓ ${albumPhoto.photo_name}: ${photoSize} bytes (found by ${foundBy})`);
+                }
+                else {
+                    console.log(`  ⚠️ ${albumPhoto.photo_name}: size not found (URL: ${albumPhoto.photo_url})`);
+                }
                 totalSize += photoSize;
             });
+            console.log(`💾 Total size calculated: ${totalSize} bytes`);
             const formattedSize = this.formatBytes(totalSize);
             console.log(`✅ Album ${albumId} total size: ${formattedSize} (${albumPhotos.length} photos)`);
             return {

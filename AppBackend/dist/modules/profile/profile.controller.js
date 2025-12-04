@@ -26,15 +26,20 @@ router.use((req, res, next) => {
     next();
 });
 router.get("/drive-usage", auth_middleware_1.authMiddleware, async (req, res) => {
+    console.log("🔔 [API] GET /profile/drive-usage called", req.headers.authorization);
     try {
         const userId = req.user?.uid;
+        console.log("[API] userId:", userId);
         if (!userId) {
+            console.log("[API] User not authenticated");
             return res.status(401).json({ error: "User not authenticated" });
         }
         const usage = await profile_service_1.ProfileService.getGoogleDriveUsage(userId);
+        console.log("🔎 [API] Google Drive usage response:", usage);
         res.json(usage);
     }
     catch (error) {
+        console.error("[API] Erro ao obter uso do Google Drive:", error);
         if (error.message === "Google Drive not connected") {
             return res.status(400).json({ error: error.message });
         }

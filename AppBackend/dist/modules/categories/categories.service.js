@@ -203,6 +203,55 @@ class CategoriesService {
             throw new Error(`Failed to delete category: ${error.message}`);
         }
     }
+    async getUserCategoriesWithSize(userId) {
+        try {
+            console.log('📊 Getting categories with size for user:', userId);
+            const query = `
+        SELECT 
+          c.id,
+          c.user_id,
+          c.name,
+          c.description,
+          c.color,
+          c.created_at,
+          COUNT(DISTINCT a.id) as album_count,
+          COALESCE(SUM(CAST(p.size AS BIGINT)), 0) as total_size
+        FROM Categories c
+        LEFT JOIN albums_categories ac ON c.id = ac.category_id
+        LEFT JOIN Albums a ON ac.album_id = a.id
+        LEFT JOIN album_photos ap ON a.id = ap.album_id
+        LEFT JOIN Photos p ON ap.photo_name = p.name AND a.user_id = p.user_id
+        WHERE c.user_id = $1
+        GROUP BY c.id, c.user_id, c.name, c.description, c.color, c.created_at
+        ORDER BY c.name ASC
+      `;
+            const result = await database_1.pool.query(query, [userId]);
+            console.log(`✅ Found ${result.rows.length} categories with calculated sizes`);
+            return result.rows.map(row => ({
+                id: row.id,
+                user_id: row.user_id,
+                name: row.name,
+                description: row.description,
+                color: row.color,
+                created_at: row.created_at,
+                totalSize: parseInt(row.total_size) || 0,
+                albumCount: parseInt(row.album_count) || 0,
+                formattedSize: this.formatBytes(parseInt(row.total_size) || 0)
+            }));
+        }
+        catch (error) {
+            console.error('❌ Error getting categories with size:', error.message);
+            throw new Error(`Failed to get categories with size: ${error.message}`);
+        }
+    }
+    formatBytes(bytes) {
+        if (bytes === 0)
+            return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
 }
 exports.CategoriesService = CategoriesService;
 //# sourceMappingURL=categories.service.js.map

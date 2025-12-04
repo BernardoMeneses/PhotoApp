@@ -22,5 +22,11 @@ export declare class CategoriesService {
     getCategoryById(categoryId: number, userId: string): Promise<Category | null>;
     updateCategory(categoryId: number, categoryData: Partial<CreateCategoryData>, userId: string): Promise<Category>;
     deleteCategory(categoryId: number, userId: string): Promise<boolean>;
+    getUserCategoriesWithSize(userId: string): Promise<Array<Category & {
+        totalSize: number;
+        albumCount: number;
+        formattedSize: string;
+    }>>;
+    private formatBytes;
 }
 //# sourceMappingURL=categories.service.d.ts.map

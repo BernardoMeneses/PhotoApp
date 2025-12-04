@@ -8,8 +8,8 @@ const stripe_1 = __importDefault(require("stripe"));
 const database_1 = require("../../config/database");
 class PaymentsService {
     constructor() {
-        this.MONTHLY_PRICE_CENTS = 999;
-        this.YEARLY_PRICE_CENTS = 9999;
+        this.MONTHLY_PRICE_CENTS = 399;
+        this.YEARLY_PRICE_CENTS = 3999;
         this.CURRENCY = 'eur';
         const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
         if (!stripeSecretKey) {
@@ -22,16 +22,27 @@ class PaymentsService {
     }
     async getOrCreateStripeCustomer(userId) {
         try {
-            const query = 'SELECT stripe_customer_id FROM users WHERE id = $1';
+            const query = 'SELECT stripe_customer_id, email FROM users WHERE id = $1';
             const result = await this.pool.query(query, [userId]);
             if (result.rows[0]?.stripe_customer_id) {
-                return await this.stripe.customers.retrieve(result.rows[0].stripe_customer_id);
+                try {
+                    const customer = await this.stripe.customers.retrieve(result.rows[0].stripe_customer_id);
+                    if (customer.deleted) {
+                        throw new Error('Customer was deleted');
+                    }
+                    return customer;
+                }
+                catch (error) {
+                    console.warn(`⚠️ Customer ${result.rows[0].stripe_customer_id} not found in Stripe, creating new one`);
+                }
             }
             const customer = await this.stripe.customers.create({
+                email: result.rows[0]?.email,
                 metadata: {
                     user_id: userId
                 }
             });
+            console.log(`✅ Created new Stripe customer: ${customer.id} for user: ${userId}`);
             const updateQuery = 'UPDATE users SET stripe_customer_id = $1 WHERE id = $2';
             await this.pool.query(updateQuery, [customer.id, userId]);
             return customer;

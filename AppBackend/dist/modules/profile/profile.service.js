@@ -23,10 +23,14 @@ class ProfileService {
         const googleDriveService = new google_drive_service_1.GoogleDriveService();
         const drive = googleDriveService["createDriveClient"](tokens);
         const about = await drive.about.get({ fields: "storageQuota" });
+        console.log("[GoogleDrive] about.data:", about.data);
         const quota = about.data.storageQuota;
+        if (!quota) {
+            throw new Error("Não foi possível obter a quota do Google Drive. Verifique se a conta está conectada corretamente e se o token tem permissão.");
+        }
         return {
-            used: Number(quota?.usage || 0),
-            total: Number(quota?.limit || 15 * 1024 * 1024 * 1024),
+            used: Number(quota.usage || 0),
+            total: Number(quota.limit || 15 * 1024 * 1024 * 1024),
         };
     }
     static async getCurrentProfile(idToken) {

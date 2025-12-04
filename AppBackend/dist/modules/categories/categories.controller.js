@@ -52,11 +52,21 @@ router.get("/", auth_middleware_1.authMiddleware, async (req, res) => {
         if (!req.user?.uid) {
             return res.status(401).json({ error: "User not authenticated" });
         }
-        const categories = await categoriesService.getUserCategories(req.user.uid);
-        res.json({
-            message: "Categories retrieved successfully",
-            data: categories
-        });
+        const includeSize = req.query.includeSize === 'true';
+        if (includeSize) {
+            const categoriesWithSize = await categoriesService.getUserCategoriesWithSize(req.user.uid);
+            res.json({
+                message: "Categories with size retrieved successfully",
+                data: categoriesWithSize
+            });
+        }
+        else {
+            const categories = await categoriesService.getUserCategories(req.user.uid);
+            res.json({
+                message: "Categories retrieved successfully",
+                data: categories
+            });
+        }
     }
     catch (error) {
         console.error("Get categories error:", error);

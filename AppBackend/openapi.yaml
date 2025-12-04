@@ -819,9 +819,50 @@ paths:
       summary: Get user categories (auth required)
       security:
         - bearerAuth: []
+      parameters:
+        - name: includeSize
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: If true, includes total size calculation for each category (sum of all albums' photos)
       responses:
         '200':
           description: Categories list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        user_id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+                        color:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                        totalSize:
+                          type: integer
+                          description: Total size in bytes (only if includeSize=true)
+                        albumCount:
+                          type: integer
+                          description: Number of albums in category (only if includeSize=true)
+                        formattedSize:
+                          type: string
+                          description: Human readable size like "50 MB" (only if includeSize=true)
   /categories/{id}:
     get:
       tags:
