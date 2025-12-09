@@ -288,53 +288,62 @@ export class PhotosService {
   }
 
   // Deletar uma foto específica de um usuário - APENAS GOOGLE DRIVE
-  async deleteUserPhoto(photoId: string, userId: string): Promise<boolean> {
-    console.log(`🗑️ Deletando foto ${photoId} do Google Drive do usuário ${userId}`);
+  async deleteUserPhoto(photoIdOrName: string, userId: string): Promise<boolean> {
+  console.log(`🗑️ Deletando foto ${photoIdOrName} do Google Drive do usuário ${userId}`);
 
-    // Verificar se o usuário tem tokens do Google Drive
-    const hasGoogleDriveTokens = await GoogleDriveTokenService.hasTokens(userId);
-    
-    if (!hasGoogleDriveTokens) {
-      throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
-    }
-
-    try {
-      const tokens = await GoogleDriveTokenService.loadTokens(userId);
-      if (!tokens) {
-        throw new Error("Falha ao carregar tokens do Google Drive");
-      }
-
-      const deleted = await googleDriveService.deletePhoto(tokens, photoId);
-      
-      if (deleted) {
-        // ✅ NOVO: Remover também da base de dados
-        const client = await pool.connect();
-        try {
-          await client.query(`
-            DELETE FROM photo_metadata 
-            WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2)
-          `, [userId, photoId]);
-          
-          console.log(`🗑️ Foto ${photoId} removida da base de dados`);
-        } catch (dbError: any) {
-          console.error('❌ Erro ao remover foto da base de dados:', dbError.message);
-          // Não falhar a operação - a foto já foi deletada do Drive
-        } finally {
-          client.release();
-        }
-        
-        console.log(`✅ Foto ${photoId} deletada com sucesso do Google Drive`);
-        return true;
-      } else {
-        console.warn(`⚠️ Foto ${photoId} não encontrada no Google Drive`);
-        return false;
-      }
-
-    } catch (error: any) {
-      console.error('❌ Erro ao deletar foto do Google Drive:', error.message);
-      throw new Error(`Falha ao deletar foto: ${error.message}`);
-    }
+  const hasGoogleDriveTokens = await GoogleDriveTokenService.hasTokens(userId);
+  if (!hasGoogleDriveTokens) {
+    throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
   }
+
+  const client = await pool.connect();
+  try {
+    const tokens = await GoogleDriveTokenService.loadTokens(userId);
+    if (!tokens) throw new Error("Falha ao carregar tokens do Google Drive");
+
+    // 🔍 Encontrar a foto pelo ID ou nome (parcialmente se necessário)
+    const { rows } = await client.query(
+      `
+      SELECT photo_id, photo_name
+      FROM photo_metadata
+      WHERE user_id = $1
+      AND (photo_id = $2 OR photo_name = $2 OR photo_name LIKE '%' || $2 || '%')
+      LIMIT 1
+      `,
+      [userId, photoIdOrName]
+    );
+
+    if (rows.length === 0) {
+      console.warn(`⚠️ Foto ${photoIdOrName} não encontrada na base de dados.`);
+      return false;
+    }
+
+    const photo = rows[0];
+    const deleted = await googleDriveService.deletePhoto(tokens, photo.photo_id);
+
+    if (deleted) {
+      await client.query(
+        `
+        DELETE FROM photo_metadata 
+        WHERE user_id = $1
+        AND (photo_id = $2 OR photo_name = $3 OR photo_name LIKE '%' || $3 || '%')
+        `,
+        [userId, photo.photo_id, photo.photo_name]
+      );
+
+      console.log(`✅ Foto ${photo.photo_name} removida do Drive e da base de dados`);
+      return true;
+    } else {
+      console.warn(`⚠️ Foto ${photo.photo_name} não encontrada no Google Drive`);
+      return false;
+    }
+  } catch (error: any) {
+    console.error("❌ Erro ao deletar foto:", error.message);
+    throw new Error(`Falha ao deletar foto: ${error.message}`);
+  } finally {
+    client.release();
+  }
+}
 
   // Deletar foto por URL (extrair ID do arquivo da URL do Google Drive)
   async deletePhotoByUrl(photoUrl: string, userId: string): Promise<boolean> {
@@ -356,145 +365,80 @@ export class PhotosService {
   }
 
   // Deletar múltiplas fotos de uma vez - APENAS GOOGLE DRIVE
-  async batchDeletePhotos(photoIdentifiers: string[], userId: string): Promise<{ success: string[], failed: string[] }> {
-    console.log(`🗑️ Deletando ${photoIdentifiers.length} fotos em lote do Google Drive`);
+  async batchDeletePhotos(photoIdentifiers: string[], userId: string): Promise<{ success: string[]; failed: string[] }> {
+  console.log(`🗑️ Deletando ${photoIdentifiers.length} fotos em lote do Google Drive`);
 
-    // Verificar se o usuário tem tokens do Google Drive
-    const hasGoogleDriveTokens = await GoogleDriveTokenService.hasTokens(userId);
-    
-    if (!hasGoogleDriveTokens) {
-      throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
-    }
-
-    const tokens = await GoogleDriveTokenService.loadTokens(userId);
-    if (!tokens) {
-      throw new Error("Falha ao carregar tokens do Google Drive");
-    }
-
-    try {
-      // Primeiro, listar todas as fotos do usuário para mapear nomes para IDs
-      const userPhotos = await googleDriveService.listPhotos(tokens);
-      const photoMap = new Map<string, string>(); // name -> id
-      
-      for (const photo of userPhotos) {
-        photoMap.set(photo.name, photo.id);
-      }
-
-      console.log(`📋 Mapeadas ${photoMap.size} fotos do usuário`);
-
-      // Converter identificadores (nomes ou IDs) para IDs válidos
-      const photoIds: string[] = [];
-      const notFound: string[] = [];
-
-      for (const identifier of photoIdentifiers) {
-        // Verificar se é um ID direto (Google Drive IDs são alphanumeric com hífens/underscores)
-        if (identifier.match(/^[a-zA-Z0-9_-]+$/)) {
-          // Pode ser um ID, verificar se existe
-          const foundById = userPhotos.find(photo => photo.id === identifier);
-          if (foundById) {
-            photoIds.push(identifier);
-            continue;
-          }
-        }
-
-        // Tentar buscar por nome
-        const photoId = photoMap.get(identifier);
-        if (photoId) {
-          photoIds.push(photoId);
-        } else {
-          console.warn(`⚠️ Foto não encontrada: ${identifier}`);
-          notFound.push(identifier);
-        }
-      }
-
-      console.log(`🎯 Encontrados ${photoIds.length} IDs válidos para deletar`);
-      console.log(`❌ ${notFound.length} fotos não encontradas`);
-
-      const result = await googleDriveService.batchDeletePhotos(tokens, photoIds);
-      
-      // ✅ NOVO: Remover fotos deletadas com sucesso da base de dados
-      if (result.success.length > 0) {
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-          
-          for (const deletedPhotoId of result.success) {
-            // Deletar da photo_metadata usando photo_id ou photo_name
-            await client.query(`
-              DELETE FROM photo_metadata 
-              WHERE user_id = $1 AND (photo_id = $2 OR photo_name = $2)
-            `, [userId, deletedPhotoId]);
-            
-            console.log(`🗑️ Removida foto ${deletedPhotoId} da base de dados`);
-          }
-          
-          await client.query('COMMIT');
-          console.log(`✅ ${result.success.length} fotos removidas da base de dados`);
-        } catch (dbError: any) {
-          await client.query('ROLLBACK');
-          console.error('❌ Erro ao remover fotos da base de dados:', dbError.message);
-          // Não falhar a operação inteira por erro da BD - as fotos já foram deletadas do Drive
-        } finally {
-          client.release();
-        }
-      }
-      
-      // Adicionar fotos não encontradas aos failed
-      result.failed.push(...notFound);
-      
-      console.log(`✅ ${result.success.length} fotos deletadas com sucesso`);
-      console.log(`❌ ${result.failed.length} fotos falharam`);
-      
-      return result;
-
-    } catch (error: any) {
-      console.error('❌ Erro no batch delete:', error.message);
-      
-      // Fallback: deletar uma por uma usando método individual que já resolve nomes
-      const results = {
-        success: [] as string[],
-        failed: [] as string[]
-      };
-
-      for (const identifier of photoIdentifiers) {
-        try {
-          // Primeiro tentar como ID direto
-          let deleted = false;
-          if (identifier.match(/^[a-zA-Z0-9_-]+$/)) {
-            try {
-              deleted = await this.deleteUserPhoto(identifier, userId);
-            } catch (error) {
-              // Se falhar como ID, tentar como nome
-              deleted = false;
-            }
-          }
-
-          // Se não funcionou como ID, tentar buscar por nome
-          if (!deleted) {
-            try {
-              const userPhotos = await googleDriveService.listPhotos(tokens);
-              const photo = userPhotos.find(p => p.name === identifier);
-              if (photo) {
-                deleted = await this.deleteUserPhoto(photo.id, userId);
-              }
-            } catch (error) {
-              console.error(`❌ Erro ao buscar foto por nome ${identifier}:`, error);
-            }
-          }
-
-          if (deleted) {
-            results.success.push(identifier);
-          } else {
-            results.failed.push(identifier);
-          }
-        } catch (error) {
-          console.error(`❌ Falha ao deletar ${identifier}:`, error);
-          results.failed.push(identifier);
-        }
-      }
-
-      return results;
-    }
+  const hasGoogleDriveTokens = await GoogleDriveTokenService.hasTokens(userId);
+  if (!hasGoogleDriveTokens) {
+    throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
   }
+
+  const tokens = await GoogleDriveTokenService.loadTokens(userId);
+  if (!tokens) throw new Error("Falha ao carregar tokens do Google Drive");
+
+  const client = await pool.connect();
+  const success: string[] = [];
+  const failed: string[] = [];
+
+  try {
+    await client.query("BEGIN");
+
+    for (const identifier of photoIdentifiers) {
+      try {
+        // 🔍 Procurar foto por ID, nome ou correspondência parcial
+        const { rows } = await client.query(
+          `
+          SELECT photo_id, photo_name
+          FROM photo_metadata
+          WHERE user_id = $1
+          AND (photo_id = $2 OR photo_name = $2 OR photo_name LIKE '%' || $2 || '%')
+          LIMIT 1
+          `,
+          [userId, identifier]
+        );
+
+        if (rows.length === 0) {
+          console.warn(`⚠️ Foto ${identifier} não encontrada na base de dados.`);
+          failed.push(identifier);
+          continue;
+        }
+
+        const photo = rows[0];
+        const deleted = await googleDriveService.deletePhoto(tokens, photo.photo_id);
+
+        if (deleted) {
+          await client.query(
+            `
+            DELETE FROM photo_metadata 
+            WHERE user_id = $1
+            AND (photo_id = $2 OR photo_name = $3 OR photo_name LIKE '%' || $3 || '%')
+            `,
+            [userId, photo.photo_id, photo.photo_name]
+          );
+
+          success.push(photo.photo_id);
+          console.log(`✅ Foto ${photo.photo_name} removida`);
+        } else {
+          failed.push(identifier);
+          console.warn(`⚠️ Foto ${photo.photo_name} não encontrada no Drive`);
+        }
+      } catch (err: any) {
+        console.error(`❌ Falha ao deletar ${identifier}:`, err.message);
+        failed.push(identifier);
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ Erro no batch delete:", err);
+    failed.push(...photoIdentifiers);
+  } finally {
+    client.release();
+  }
+
+  console.log(`✅ ${success.length} deletadas | ❌ ${failed.length} falharam`);
+  return { success, failed };
+}
 }
 
