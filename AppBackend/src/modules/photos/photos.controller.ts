@@ -344,13 +344,23 @@ router.get("/drive-status", authMiddleware, async (req: AuthenticatedRequest, re
     const hasTokens = await GoogleDriveTokenService.hasTokens(req.user.uid);
     
     if (hasTokens) {
-      const tokens = await GoogleDriveTokenService.loadTokens(req.user.uid);
-      const isValid = tokens ? await googleDriveService.validateTokens(tokens) : false;
-      
-      res.status(200).json({
-        connected: true,
-        valid: isValid
-      });
+      try {
+        // Tentar obter tokens válidos (com refresh automático)
+        const tokens = await GoogleDriveTokenService.getValidTokens(req.user.uid);
+        const isValid = tokens ? await googleDriveService.validateTokens(tokens) : false;
+        
+        res.status(200).json({
+          connected: true,
+          valid: isValid
+        });
+      } catch (refreshError: any) {
+        // Se falhar o refresh, tokens são inválidos
+        res.status(200).json({
+          connected: true,
+          valid: false,
+          error: refreshError.message
+        });
+      }
     } else {
       res.status(200).json({
         connected: false,

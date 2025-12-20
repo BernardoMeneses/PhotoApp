@@ -22,10 +22,13 @@ export class PhotosService {
       throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
     }
 
-    const tokens = await GoogleDriveTokenService.loadTokens(userId);
+    // Obter tokens válidos (com refresh automático se expirados)
+    const tokens = await GoogleDriveTokenService.getValidTokens(userId);
     if (!tokens) {
       throw new Error("Falha ao carregar tokens do Google Drive");
     }
+
+    console.log(`🔑 Tokens válidos obtidos para usuário ${userId}`);
 
     // Upload para Google Drive
     for (const file of files) {
@@ -81,7 +84,8 @@ export class PhotosService {
     }
 
     try {
-      const tokens = await GoogleDriveTokenService.loadTokens(userId);
+      // Obter tokens válidos (com refresh automático se expirados)
+      const tokens = await GoogleDriveTokenService.getValidTokens(userId);
       if (!tokens) {
         throw new Error("Falha ao carregar tokens do Google Drive");
       }
@@ -298,7 +302,8 @@ export class PhotosService {
 
   const client = await pool.connect();
   try {
-    const tokens = await GoogleDriveTokenService.loadTokens(userId);
+    // Obter tokens válidos (com refresh automático se expirados)
+    const tokens = await GoogleDriveTokenService.getValidTokens(userId);
     if (!tokens) throw new Error("Falha ao carregar tokens do Google Drive");
 
     // 🔍 Encontrar a foto pelo ID ou nome (parcialmente se necessário)
@@ -373,7 +378,8 @@ export class PhotosService {
     throw new Error("Google Drive não conectado. Por favor, conecte seu Google Drive primeiro.");
   }
 
-  const tokens = await GoogleDriveTokenService.loadTokens(userId);
+  // Obter tokens válidos (com refresh automático se expirados)
+  const tokens = await GoogleDriveTokenService.getValidTokens(userId);
   if (!tokens) throw new Error("Falha ao carregar tokens do Google Drive");
 
   const client = await pool.connect();

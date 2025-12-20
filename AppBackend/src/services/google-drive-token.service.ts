@@ -1,4 +1,5 @@
 import { pool } from '../config/database';
+import { googleDriveService } from './google-drive.service';
 
 interface GoogleDriveTokens {
   user_id: string;
@@ -106,6 +107,58 @@ export class GoogleDriveTokenService {
       console.error('❌ Erro ao carregar tokens:', error.message);
       throw new Error('Failed to load Google Drive tokens');
     }
+  }
+
+  /**
+   * Obter tokens válidos (com refresh automático se expirados)
+   */
+  static async getValidTokens(userId: string): Promise<GoogleDriveTokens | null> {
+    const tokens = await this.loadTokens(userId);
+    
+    if (!tokens) {
+      console.log(`📭 Nenhum token encontrado para usuário: ${userId}`);
+      return null;
+    }
+
+    // Verificar se o token está expirado ou prestes a expirar (5 minutos de margem)
+    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000);
+    const isExpired = tokens.expiry_date && tokens.expiry_date < fiveMinutesFromNow;
+
+    if (isExpired) {
+      console.log(`⏰ Token expirado para usuário ${userId}, fazendo refresh...`);
+      
+      if (!tokens.refresh_token) {
+        console.error('❌ Sem refresh_token disponível, usuário precisa reconectar');
+        throw new Error('Token expirado e sem refresh_token. Por favor, reconecte o Google Drive.');
+      }
+
+      try {
+        // Fazer refresh dos tokens
+        const newTokens = await googleDriveService.refreshTokens(tokens.refresh_token);
+        
+        // Atualizar na base de dados
+        await this.updateAccessToken(
+          userId, 
+          newTokens.access_token, 
+          newTokens.expiry_date
+        );
+
+        console.log(`✅ Token refreshed com sucesso para usuário ${userId}`);
+        
+        // Retornar tokens atualizados
+        return {
+          ...tokens,
+          access_token: newTokens.access_token,
+          expiry_date: newTokens.expiry_date
+        };
+      } catch (error: any) {
+        console.error(`❌ Erro ao fazer refresh do token: ${error.message}`);
+        throw new Error('Falha ao renovar token. Por favor, reconecte o Google Drive.');
+      }
+    }
+
+    console.log(`✅ Token válido para usuário ${userId}`);
+    return tokens;
   }
 
   /**
