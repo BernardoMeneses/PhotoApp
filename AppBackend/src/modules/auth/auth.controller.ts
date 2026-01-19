@@ -3,8 +3,10 @@ import { AuthService } from "./auth.service";
 import { authMiddleware, AuthenticatedRequest } from "../../middleware/auth.middleware";
 import { googleDriveService } from "../../services/google-drive.service";
 import { GoogleDriveTokenService } from "../../services/google-drive-token.service";
+import { UsersService } from "../users/users.service";
 
 const router = Router();
+const usersService = new UsersService();
 
 /**
  * Registo de utilizador
@@ -17,6 +19,10 @@ router.post("/signup", async (req, res) => {
     }
 
     const result = await AuthService.signup(email, password);
+    
+    // Criar utilizador na base de dados local
+    await usersService.ensureUserExists(result.user.id, result.user.email);
+    
     res.json(result);
   } catch (err: any) {
     console.error("❌ Signup error:", err.response?.data || err.message);
@@ -35,6 +41,10 @@ router.post("/login", async (req, res) => {
     }
 
     const result = await AuthService.login(email, password);
+    
+    // Garantir que o utilizador existe na base de dados local
+    await usersService.ensureUserExists(result.user.id, result.user.email);
+    
     res.json(result);
   } catch (err: any) {
     console.error("❌ Login error:", err.response?.data || err.message);
@@ -62,6 +72,9 @@ router.post("/google/callback", async (req, res) => {
     console.log("🎫 Token preview:", idToken.substring(0, 50) + "...");
     
     const result = await AuthService.loginWithGoogle(idToken);
+    
+    // Garantir que o utilizador existe na base de dados local
+    await usersService.ensureUserExists(result.user.id, result.user.email);
     
     console.log("✅ Google authentication successful");
     console.log("👤 User:", result.user.email);

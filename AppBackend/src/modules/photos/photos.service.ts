@@ -2,6 +2,9 @@ import { v4 as uuidv4 } from "uuid";
 import { googleDriveService } from "../../services/google-drive.service";
 import { GoogleDriveTokenService } from "../../services/google-drive-token.service";
 import { pool } from "../../config/database";
+import { UsersService } from "../users/users.service";
+
+const usersService = new UsersService();
 
 export class PhotosService {
   // Upload para Google Drive (método principal)
@@ -122,6 +125,18 @@ export class PhotosService {
   async savePhotoMetadata(userId: string, photoId: string, photoName: string, photoUrl: string, status: 'unsorted' | 'library' | 'album' = 'unsorted') {
     const client = await pool.connect();
     try {
+      // Verificar se o utilizador existe na base de dados (criar se não existir)
+      const userExists = await usersService.userExists(userId);
+      if (!userExists) {
+        console.log(`⚠️ Utilizador ${userId} não existe na BD. A criar...`);
+        // Criar utilizador com email placeholder (será atualizado no próximo login)
+        await client.query(`
+          INSERT INTO Users (id, email, password_hash, created_at)
+          VALUES ($1, $2, 'FIREBASE_AUTH', NOW())
+          ON CONFLICT (id) DO NOTHING
+        `, [userId, `user_${userId}@temp.local`]);
+      }
+      
       await client.query(`
         INSERT INTO photo_metadata (user_id, photo_id, photo_name, photo_url, status, created_time)
         VALUES ($1, $2, $3, $4, $5, NOW())
@@ -135,6 +150,7 @@ export class PhotosService {
       console.log(`💾 Metadados salvos: ${photoName} (status: ${status})`);
     } catch (error: any) {
       console.error('❌ Erro ao salvar metadados:', error.message);
+      throw error; // Re-throw para que o chamador saiba que falhou
     } finally {
       client.release();
     }
