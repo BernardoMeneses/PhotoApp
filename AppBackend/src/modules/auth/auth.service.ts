@@ -49,6 +49,12 @@ export class AuthService {
   /**
    * Troca um Firebase refresh token por um novo idToken (e possivelmente novo refreshToken)
    * Retorna também um token JWT interno para uso em outras partes do backend
+   * 
+   * NOTA: O Firebase idToken expira em 1 hora (3600 segundos)
+   * O refreshToken não expira a menos que:
+   * - O utilizador mude a password
+   * - O utilizador desabilite a conta
+   * - O admin revogue os tokens
    */
   static async refreshFirebaseToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string; token: string; userId?: string; expiresIn?: string }> {
     try {
@@ -63,6 +69,8 @@ export class AuthService {
       params.append('grant_type', 'refresh_token');
       params.append('refresh_token', refreshToken);
 
+      console.log('🔄 Calling Firebase token refresh API...');
+      
       const response = await axios.post(url, params.toString(), {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
@@ -73,11 +81,33 @@ export class AuthService {
       const userId = response.data.user_id as string;
       const expiresIn = response.data.expires_in as string;
 
+      console.log(`✅ Firebase token refreshed. New token expires in ${expiresIn} seconds`);
+
       const token = userId ? this.generateToken(userId) : this.generateToken('');
 
       return { idToken, refreshToken: newRefreshToken, token, userId, expiresIn };
     } catch (error: any) {
       console.error('❌ Error refreshing Firebase token:', error.response?.data || error.message);
+      
+      // Capturar erros específicos do Firebase
+      const firebaseError = error.response?.data?.error;
+      if (firebaseError) {
+        const errorMessage = firebaseError.message || firebaseError;
+        
+        switch (errorMessage) {
+          case 'TOKEN_EXPIRED':
+            throw new Error('TOKEN_EXPIRED: Refresh token has expired. User needs to login again.');
+          case 'INVALID_REFRESH_TOKEN':
+            throw new Error('INVALID_REFRESH_TOKEN: The refresh token is invalid or malformed.');
+          case 'USER_DISABLED':
+            throw new Error('USER_DISABLED: The user account has been disabled.');
+          case 'USER_NOT_FOUND':
+            throw new Error('USER_NOT_FOUND: The user may have been deleted.');
+          default:
+            throw new Error(`Firebase error: ${errorMessage}`);
+        }
+      }
+      
       throw new Error('Failed to refresh token');
     }
   }

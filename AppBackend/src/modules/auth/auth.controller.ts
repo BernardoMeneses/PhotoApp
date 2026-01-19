@@ -81,27 +81,52 @@ router.post("/google/callback", async (req, res) => {
 /**
  * Refresh token endpoint
  * Recebe { refreshToken } e troca por um novo Firebase idToken (útil para clientes móveis)
+ * 
+ * O Firebase idToken expira em 1 hora. Use este endpoint para obter um novo idToken
+ * sem precisar de login novamente.
+ * 
+ * O refreshToken do Firebase não expira (a menos que seja revogado ou o utilizador
+ * mude a password), então pode ser guardado de forma segura no dispositivo.
  */
 router.post('/refresh', async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(400).json({ error: 'refreshToken is required' });
+      return res.status(400).json({ 
+        error: 'MISSING_REFRESH_TOKEN',
+        message: 'refreshToken is required' 
+      });
     }
 
+    console.log('🔄 Refreshing Firebase token...');
     const refreshed = await AuthService.refreshFirebaseToken(refreshToken);
+    console.log('✅ Token refreshed successfully for user:', refreshed.userId);
 
     return res.status(200).json({
       idToken: refreshed.idToken,
       refreshToken: refreshed.refreshToken,
       token: refreshed.token,
       userId: refreshed.userId,
-      expiresIn: refreshed.expiresIn
+      expiresIn: refreshed.expiresIn,
+      message: 'Token refreshed successfully'
     });
   } catch (err: any) {
     console.error('❌ Refresh token error:', err.message || err);
-    res.status(401).json({ error: err.message || 'Failed to refresh token' });
+    
+    // Verificar se o refresh token foi revogado ou é inválido
+    const errorMessage = err.message || '';
+    if (errorMessage.includes('TOKEN_EXPIRED') || errorMessage.includes('INVALID_REFRESH_TOKEN')) {
+      return res.status(401).json({ 
+        error: 'REFRESH_TOKEN_INVALID',
+        message: 'Refresh token is invalid or expired. User needs to login again.' 
+      });
+    }
+    
+    res.status(401).json({ 
+      error: 'REFRESH_FAILED',
+      message: err.message || 'Failed to refresh token' 
+    });
   }
 });
 
